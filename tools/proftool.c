@@ -519,11 +519,11 @@ static int make_ftrace(void)
 			continue;
 		}
 
-		printf("%16s-%-5d [01] %lu.%06lu: ", "uboot", 1,
+		printf("%16s-%-5d [01] %lu.%06lu: ", "u-boot", 1,
 		       time / 1000000, time % 1000000);
 
 		out_func(call->func, 0, " <- ");
-		out_func(call->caller, 1, "\n");
+		out_func(call->caller, 1, TRACE_CALL_TYPE(call) == FUNCF_ENTRY ? " (entry)\n":" (exit)\n");
 	}
 	info("ftrace: %d functions not found, %d excluded\n", missing_count,
 	     skip_count);
