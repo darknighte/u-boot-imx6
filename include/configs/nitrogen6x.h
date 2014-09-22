@@ -10,6 +10,12 @@
 #ifndef __CONFIG_H
 #define __CONFIG_H
 
+#ifdef FTRACE
+#define CONFIG_TRACE
+#define CONFIG_CMD_TRACE
+#define CONFIG_TRACE_BUFFER_SIZE	(16 << 20)
+#endif
+
 #include "mx6_common.h"
 #define CONFIG_MX6
 #define CONFIG_DISPLAY_CPUINFO
@@ -360,7 +366,13 @@
 #endif
 
 #if defined(CONFIG_ENV_IS_IN_MMC)
+#ifdef CONFIG_TRACE
+/* tracing makes u-boot much larger, reserve 768K instead of 384K
+   for u-boot, and use the last 8K for the env. */
+#define CONFIG_ENV_OFFSET		(760 * 1024)
+#else
 #define CONFIG_ENV_OFFSET		(6 * 64 * 1024)
+#endif
 #define CONFIG_SYS_MMC_ENV_DEV		0
 #elif defined(CONFIG_ENV_IS_IN_SPI_FLASH)
 #define CONFIG_ENV_OFFSET		(768 * 1024)
