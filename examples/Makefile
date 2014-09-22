@@ -1,7 +1,8 @@
 ifndef CONFIG_SANDBOX
 
 ifdef FTRACE
-subdir-ccflags-y += -finstrument-functions -DFTRACE
+# can't build examples with kernel tracing
+KBUILD_CFLAGS := $(filter-out -finstrument-functions -DFTRACE, $(KBUILD_CFLAGS))
 endif
 
 subdir-y += standalone
