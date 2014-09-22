@@ -17,8 +17,10 @@
  */
 
 #include <linux/types.h>
+#include <compiler.h>
 
-uint32_t __div64_32(uint64_t *n, uint32_t base)
+/* called by tick_to_time() via do_div() when dividend is large enough, thus notrace */
+notrace uint32_t __div64_32(uint64_t *n, uint32_t base)
 {
 	uint64_t rem = *n;
 	uint64_t b = base;

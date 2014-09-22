@@ -32,7 +32,7 @@ static struct mxc_gpt *cur_gpt = (struct mxc_gpt *)GPT1_BASE_ADDR;
 
 DECLARE_GLOBAL_DATA_PTR;
 
-static inline unsigned long long tick_to_time(unsigned long long tick)
+static inline notrace unsigned long long tick_to_time(unsigned long long tick)
 {
 	tick *= CONFIG_SYS_HZ;
 	do_div(tick, MXC_CLK32);
@@ -40,7 +40,7 @@ static inline unsigned long long tick_to_time(unsigned long long tick)
 	return tick;
 }
 
-static inline unsigned long long us_to_tick(unsigned long long usec)
+static inline notrace unsigned long long us_to_tick(unsigned long long usec)
 {
 	usec = usec * MXC_CLK32 + 999999;
 	do_div(usec, 1000000);
@@ -48,7 +48,7 @@ static inline unsigned long long us_to_tick(unsigned long long usec)
 	return usec;
 }
 
-int timer_init(void)
+int notrace timer_init(void)
 {
 	int i;
 
@@ -71,7 +71,7 @@ int timer_init(void)
 	return 0;
 }
 
-unsigned long long get_ticks(void)
+unsigned long long notrace get_ticks(void)
 {
 	ulong now = __raw_readl(&cur_gpt->counter); /* current tick value */
 
@@ -101,8 +101,7 @@ ulong get_timer(ulong base)
 /* delay x useconds AND preserve advance timstamp value */
 void __udelay(unsigned long usec)
 {
-	unsigned long long tmp;
-	ulong tmo;
+	unsigned long long tmp, tmo;
 
 	tmo = us_to_tick(usec);
 	tmp = get_ticks() + tmo;	/* get current timestamp */
@@ -115,7 +114,7 @@ void __udelay(unsigned long usec)
  * This function is derived from PowerPC code (timebase clock frequency).
  * On ARM it returns the number of timer ticks per second.
  */
-ulong get_tbclk(void)
+notrace ulong get_tbclk(void)
 {
 	return MXC_CLK32;
 }
