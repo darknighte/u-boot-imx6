@@ -235,7 +235,7 @@ static int read_profile(FILE *fin, int *not_found)
 		int err;
 
 		err = read_data(fin, &hdr, sizeof(hdr));
-		if (err == 1)
+		if (err == 1 || hdr.type == TRACE_CHUNK_NONE)
 			break; /* EOF */
 		else if (err)
 			return 1;
@@ -249,6 +249,8 @@ static int read_profile(FILE *fin, int *not_found)
 			if (read_calls(fin, hdr.rec_count))
 				return 1;
 			break;
+		default:  /* should never happen! */
+			return 1;
 		}
 	}
 	return 0;

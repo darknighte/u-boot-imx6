@@ -27,6 +27,7 @@ enum {
 };
 
 enum trace_chunk_type {
+	TRACE_CHUNK_NONE,
 	TRACE_CHUNK_FUNCS,
 	TRACE_CHUNK_CALLS,
 };
