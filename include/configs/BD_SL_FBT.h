@@ -197,65 +197,26 @@
 
 #if defined(CONFIG_SABRELITE)
 #define CONFIG_EXTRA_ENV_SETTINGS_BD_SL \
-	"script=boot.scr\0" \
-	"uimage=uImage\0" \
+	"args=mmc dev ${mmcdev}; run serargs; run gfxargs; run mmcargs\0" \
 	"console=ttymxc1\0" \
 	"fdt_high=0xffffffff\0" \
-	"initrd_high=0xffffffff\0" \
-	"fdt_file=imx6q-sabrelite.dtb\0" \
+	"fb0=mxcfb0:dev=ldb,LDB-XGA,if=RGB666\0" \
+	"fb1=mxcfb1:dev=ldb,LDB-XGA,if=RGB666\0" \
 	"fdt_addr=0x18000000\0" \
-	"boot_fdt=try\0" \
-	"ip_dyn=yes\0" \
+	"gpu=gpu_memory=300M consoleblank=0\0" \
+	"initrd_high=0xffffffff\0" \
+	"ip=ip=off\0" \
+	"loaduimage=mmc read ${loadaddr} 0x800 0x3000\0" \
+	"loadfdt=mmc read ${fdt_addr} 0x600 0x100\0" \
+	"memory=mem=862M\0" \
+	"mmcload=run loaduimage; run loadfdt\0" \
+	"mmcargs=setenv bootargs ${serial} ${mmcroot} ${graphics} ${memory} ${ip}\0" \
 	"mmcdev=0\0" \
 	"mmcpart=1\0" \
-	"mmcroot=/dev/mmcblk0p2 rootwait rw\0" \
-	"mmcargs=setenv bootargs console=${console},${baudrate} " \
-		"root=${mmcroot}\0" \
-	"loadbootscript=" \
-		"fatload mmc ${mmcdev}:${mmcpart} ${loadaddr} ${script};\0" \
-	"bootscript=echo Running bootscript from mmc ...; " \
-		"source\0" \
-	"loaduimage=fatload mmc ${mmcdev}:${mmcpart} ${loadaddr} ${uimage}\0" \
-	"loadfdt=fatload mmc ${mmcdev}:${mmcpart} ${fdt_addr} ${fdt_file}\0" \
-	"mmcboot=echo Booting from mmc ...; " \
-		"run mmcargs; " \
-		"if test ${boot_fdt} = yes || test ${boot_fdt} = try; then " \
-			"if run loadfdt; then " \
-				"bootm ${loadaddr} - ${fdt_addr}; " \
-			"else " \
-				"if test ${boot_fdt} = try; then " \
-					"bootm; " \
-				"else " \
-					"echo WARN: Cannot load the DT; " \
-				"fi; " \
-			"fi; " \
-		"else " \
-			"bootm; " \
-		"fi;\0" \
-	"netargs=setenv bootargs console=${console},${baudrate} " \
-		"root=/dev/nfs " \
-	"ip=dhcp nfsroot=${serverip}:${nfsroot},v3,tcp\0" \
-		"netboot=echo Booting from net ...; " \
-		"run netargs; " \
-		"if test ${ip_dyn} = yes; then " \
-			"setenv get_cmd dhcp; " \
-		"else " \
-			"setenv get_cmd tftp; " \
-		"fi; " \
-		"${get_cmd} ${uimage}; " \
-		"if test ${boot_fdt} = yes || test ${boot_fdt} = try; then " \
-			"if ${get_cmd} ${fdt_addr} ${fdt_file}; then " \
-				"bootm ${loadaddr} - ${fdt_addr}; " \
-			"else " \
-				"if test ${boot_fdt} = try; then " \
-					"bootm; " \
-				"else " \
-					"echo WARN: Cannot load the DT; " \
-				"fi; " \
-			"fi; " \
-		"else " \
-			"bootm; " \
-		"fi;\0"
+	"mmcroot=root=/dev/mmcblk0p1 rootwait rw\0" \
+	"serargs=setenv serial console=${console},${baudrate}\0" \
+	"gfxargs=setenv graphics video=${fb0} video=${fb1} ${gpu}\0"
+
 #ifdef CONFIG_TRACE
 #define CONFIG_EXTRA_ENV_SETTINGS_TRACING \
 	"fakegocmd=run tracesetup;run tracedump;run tracesave\0" \
@@ -269,16 +230,8 @@
 		CONFIG_EXTRA_ENV_SETTINGS_BD_SL \
 		CONFIG_EXTRA_ENV_SETTINGS_TRACING
 #define CONFIG_BOOTCOMMAND \
-	   "mmc dev ${mmcdev}; if mmc rescan; then " \
-		   "if run loadbootscript; then " \
-			   "run bootscript; " \
-		   "else " \
-			   "if run loaduimage; then " \
-				   "run mmcboot; " \
-			   "else run netboot; " \
-			   "fi; " \
-		   "fi; " \
-	   "else run netboot; fi"
+		"run args; run mmcload; bootm ${loadaddr} - ${fdt_addr}"
+
 #else
 #define CONFIG_EXTRA_ENV_SETTINGS \
 	"bootdevs=" CONFIG_DRIVE_TYPES "\0" \
