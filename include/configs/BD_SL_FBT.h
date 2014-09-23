@@ -37,6 +37,7 @@
 #define CONFIG_BOARD_EARLY_INIT_F
 #define CONFIG_MISC_INIT_R
 #define CONFIG_MXC_GPIO
+/* FBT
 #define CONFIG_CMD_GPIO
 #define CONFIG_CI_UDC
 #define CONFIG_USBD_HS
@@ -49,6 +50,7 @@
 #ifdef CONFIG_CMD_FUSE
 #define CONFIG_MXC_OCOTP
 #endif
+*/
 
 #define CONFIG_MXC_UART
 #define CONFIG_MXC_UART_BASE	       UART2_BASE
@@ -81,13 +83,18 @@
 #define CONFIG_CMD_MMC
 #define CONFIG_GENERIC_MMC
 #define CONFIG_BOUNCE_BUFFER
+/* FBT
 #define CONFIG_CMD_EXT2
 #define CONFIG_CMD_FAT
+*/
+
 #define CONFIG_DOS_PARTITION
 
+/* FBT
 #ifdef CONFIG_MX6Q
 #define CONFIG_CMD_SATA
 #endif
+*/
 
 /*
  * SATA Configs
@@ -101,6 +108,7 @@
 #define CONFIG_LIBATA
 #endif
 
+/* FBT
 #define CONFIG_CMD_PING
 #define CONFIG_CMD_DHCP
 #define CONFIG_CMD_MII
@@ -114,8 +122,10 @@
 #define CONFIG_PHYLIB
 #define CONFIG_PHY_MICREL
 #define CONFIG_PHY_MICREL_KSZ9021
+*/
 
 /* USB Configs */
+/* FBT
 #define CONFIG_CMD_USB
 #define CONFIG_CMD_FAT
 #define CONFIG_USB_EHCI
@@ -126,11 +136,12 @@
 #define CONFIG_USB_ETHER_MCS7830
 #define CONFIG_USB_ETHER_SMSC95XX
 #define CONFIG_USB_MAX_CONTROLLER_COUNT 2
-#define CONFIG_EHCI_HCD_INIT_AFTER_RESET	/* For OTG port */
+#define CONFIG_EHCI_HCD_INIT_AFTER_RESET
 #define CONFIG_MXC_USB_PORTSC	(PORT_PTS_UTMI | PORT_PTS_PTW)
 #define CONFIG_MXC_USB_FLAGS	0
 #define CONFIG_USB_KEYBOARD
 #define CONFIG_SYS_USB_EVENT_POLL_VIA_CONTROL_EP
+*/
 
 /* Miscellaneous commands */
 #define CONFIG_CMD_BMODE
@@ -302,7 +313,9 @@
 
 #define CONFIG_SYS_LOAD_ADDR	       CONFIG_LOADADDR
 
+/* FBT
 #define CONFIG_CMDLINE_EDITING
+*/
 
 /* Physical Memory Map */
 #define CONFIG_NR_DRAM_BANKS	       1
@@ -377,11 +390,13 @@
 
 #define CONFIG_CMD_ELF
 
+/* FBT
 #define CONFIG_USB_GADGET
 #define CONFIG_CMD_USB_MASS_STORAGE
 #define CONFIG_USB_GADGET_MASS_STORAGE
 #define CONFIG_USBDOWNLOAD_GADGET
 #define CONFIG_USB_GADGET_VBUS_DRAW	2
+*/
 
 /* Netchip IDs */
 #define CONFIG_G_DNL_VENDOR_NUM 0x0525

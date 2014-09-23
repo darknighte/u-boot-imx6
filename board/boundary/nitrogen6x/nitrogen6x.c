@@ -376,10 +376,12 @@ int board_phy_config(struct phy_device *phydev)
 
 int board_eth_init(bd_t *bis)
 {
+#ifdef CONFIG_FEC_MXC
 	uint32_t base = IMX_FEC_BASE;
 	struct mii_dev *bus = NULL;
 	struct phy_device *phydev = NULL;
 	int ret;
+#endif
 
 	setup_iomux_enet();
 
