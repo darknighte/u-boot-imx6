@@ -16,6 +16,10 @@
 #define CONFIG_TRACE_BUFFER_SIZE	(16 << 20)
 #endif
 
+#ifdef SHAREDLOGBUFFER
+#define CONFIG_LOGBUFFER
+#endif
+
 #include "mx6_common.h"
 #define CONFIG_MX6
 #define CONFIG_DISPLAY_CPUINFO
