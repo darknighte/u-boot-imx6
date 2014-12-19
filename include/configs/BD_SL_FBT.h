@@ -179,7 +179,8 @@
 
 #undef CONFIG_CMD_IMLS
 
-#define CONFIG_BOOTDELAY	       1
+#define CONFIG_BOOTDELAY	       0
+#define CONFIG_ZERO_BOOTDELAY_CHECK
 
 #define CONFIG_PREBOOT                 ""
 
@@ -216,22 +217,23 @@
 	"fdt_addr=0x18000000\0" \
 	"gpu=gpu_memory=300M consoleblank=0\0" \
 	"initrd_high=0xffffffff\0" \
-	"ip=ip=off\0" \
 	"loaduimage=mmc read ${loadaddr} 0x800 0x3000\0" \
 	"loadfdt=mmc read ${fdt_addr} 0x600 0x100\0" \
-	"memory=mem=862M\0" \
+	"misc=mem=862M ip=off\0" \
 	"mmcload=run loaduimage; run loadfdt\0" \
-	"mmcargs=setenv bootargs ${serial} ${mmcroot} ${graphics} ${memory} ${ip}\0" \
-	"mmcdev=0\0" \
+	"mmcargs=setenv bootargs ${serial} ${mmcroot} ${graphics} ${misc} ${trace}\0" \
+	"traceargs=setenv trace ftrace=function_graph trace_options=nooverwrite trace_buf_size=100M tracing_thresh=250\0" \
+	"tracecmd=run traceargs; run bootcmd\0" \
+	"mmcdev=1\0" \
 	"mmcpart=1\0" \
-	"mmcroot=root=/dev/mmcblk0p1 rootwait rw\0" \
+	"mmcroot=root=/dev/mmcblk3p1 rootwait rw\0" \
 	"serargs=setenv serial console=${console},${baudrate}\0" \
 	"gfxargs=setenv graphics video=${fb0} video=${fb1} ${gpu}\0"
 
 #ifdef CONFIG_TRACE
 #define CONFIG_EXTRA_ENV_SETTINGS_TRACING \
 	"fakegocmd=run tracesetup;run tracedump;run tracesave\0" \
-	"tracedump=mw ${profbase} 0 ${profsize};trace stats;trace funclist;trace calls\0" \
+	"tracedump=mw ${profbase} 0 ${profsize};trace stats;trace calls\0" \
 	"tracesave=print profoffset; mmc dev 0; mmc write ${profbase} 0x4000 0x8000\0" \
 	"tracesetup=trace pause;setenv profbase 0x11000000;setenv profsize 0x1000000\0"
 #else
@@ -350,7 +352,7 @@
 #else
 #define CONFIG_ENV_OFFSET		(6 * 64 * 1024)
 #endif
-#define CONFIG_SYS_MMC_ENV_DEV		0
+#define CONFIG_SYS_MMC_ENV_DEV		1
 #elif defined(CONFIG_ENV_IS_IN_SPI_FLASH)
 #define CONFIG_ENV_OFFSET		(768 * 1024)
 #define CONFIG_ENV_SECT_SIZE		(8 * 1024)
