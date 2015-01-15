@@ -235,7 +235,7 @@ static int read_profile(FILE *fin, int *not_found)
 		int err;
 
 		err = read_data(fin, &hdr, sizeof(hdr));
-		if (err == 1)
+		if (err == 1 || hdr.type == TRACE_CHUNK_NONE)
 			break; /* EOF */
 		else if (err)
 			return 1;
@@ -249,6 +249,8 @@ static int read_profile(FILE *fin, int *not_found)
 			if (read_calls(fin, hdr.rec_count))
 				return 1;
 			break;
+		default:  /* should never happen! */
+			return 1;
 		}
 	}
 	return 0;
@@ -519,11 +521,11 @@ static int make_ftrace(void)
 			continue;
 		}
 
-		printf("%16s-%-5d [01] %lu.%06lu: ", "uboot", 1,
+		printf("%16s-%-5d [01] %lu.%06lu: ", "u-boot", 1,
 		       time / 1000000, time % 1000000);
 
 		out_func(call->func, 0, " <- ");
-		out_func(call->caller, 1, "\n");
+		out_func(call->caller, 1, TRACE_CALL_TYPE(call) == FUNCF_ENTRY ? " (entry)\n":" (exit)\n");
 	}
 	info("ftrace: %d functions not found, %d excluded\n", missing_count,
 	     skip_count);
