@@ -15,7 +15,7 @@
 #include <common.h>
 #include <asm/io.h>
 
-#if defined(CONFIG_POST) || defined(CONFIG_LOGBUFFER)
+#if defined(CONFIG_POST)
 
 #ifndef CONFIG_POST_EXTERNAL_WORD_FUNCS
 #ifdef CONFIG_SYS_POST_WORD_ADDR
