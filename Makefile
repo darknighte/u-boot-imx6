@@ -357,6 +357,9 @@ KBUILD_CFLAGS   := -Wall -Wstrict-prototypes \
 		   -fno-builtin -ffreestanding
 KBUILD_AFLAGS   := -D__ASSEMBLY__
 
+KBUILD_CFLAGS += -DCONFIG_LOGBUFFER -DCONFIG_LOGBUFFER_EARLY \
+                 -DCONFIG_LOGBUFFER_CONSOLE
+
 # Read UBOOTRELEASE from include/config/uboot.release (if it exists)
 UBOOTRELEASE = $(shell cat include/config/uboot.release 2> /dev/null)
 UBOOTVERSION = $(VERSION)$(if $(PATCHLEVEL),.$(PATCHLEVEL)$(if $(SUBLEVEL),.$(SUBLEVEL)))$(EXTRAVERSION)
