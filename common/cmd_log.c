@@ -78,16 +78,15 @@ void logbuff_init_ptrs(void)
 		tag = log->v2.tag;
 	else
 		tag = log->v1.tag;
-	post_word = post_word_load();
 #ifdef CONFIG_POST
+	post_word = post_word_load();
 	/* The post routines have setup the word so we can simply test it */
 	if (tag != LOGBUFF_MAGIC || (post_word & POST_COLDBOOT))
 		logbuff_reset();
 #else
 	/* No post routines, so we do our own checking                    */
-	if (tag != LOGBUFF_MAGIC || post_word != LOGBUFF_MAGIC) {
+	if (tag != LOGBUFF_MAGIC) {
 		logbuff_reset ();
-		post_word_store (LOGBUFF_MAGIC);
 	}
 #endif
 	if (log_version == 2 && (long)log->v2.start > (long)log->v2.con)
