@@ -234,7 +234,9 @@ static int mark_bootstage(void)
 }
 
 init_fnc_t *init_sequence[] = {
+#ifdef CONFIG_TRACE
 	trace_early_init,
+#endif
 	arch_cpu_init,		/* basic arch cpu dependent setup */
 	mark_bootstage,
 #ifdef CONFIG_OF_CONTROL
