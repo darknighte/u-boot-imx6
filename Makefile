@@ -358,6 +358,10 @@ ifdef FTRACE
 KBUILD_CFLAGS += -finstrument-functions -DFTRACE
 endif
 
+ifdef SHARED_LOGBUFFER
+KBUILD_CFLAGS += -DCONFIG_LOGBUFFER
+endif
+
 # Read UBOOTRELEASE from include/config/uboot.release (if it exists)
 UBOOTRELEASE = $(shell cat include/config/uboot.release 2> /dev/null)
 UBOOTVERSION = $(VERSION)$(if $(PATCHLEVEL),.$(PATCHLEVEL)$(if $(SUBLEVEL),.$(SUBLEVEL)))$(EXTRAVERSION)
