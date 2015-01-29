@@ -358,7 +358,7 @@ ifdef FTRACE
 KBUILD_CFLAGS += -finstrument-functions -DFTRACE
 endif
 
-ifdef SHARED_LOGBUFFER
+ifdef SHAREDLOGBUFFER
 KBUILD_CFLAGS += -DCONFIG_LOGBUFFER
 endif
 
