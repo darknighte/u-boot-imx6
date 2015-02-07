@@ -20,17 +20,6 @@
 
 typedef struct {
 	union {
-                // v3 was copied directly from kernel/printk.c as of 3.10 kernel
-		struct {
-                        u32 magic;
-                        u64 ts_nsec;            /* timestamp in nanoseconds */
-                        u16 len;                /* length of entire record */
-                        u16 text_len;           /* length of text buffer */
-                        u16 dict_len;           /* length of dictionary buffer */
-                        u8 facility;            /* syslog facility */
-                        u8 flags:5;             /* internal record flags */
-                        u8 level:3;             /* syslog level */
-		} v3;
 		struct {
 			unsigned long	tag;
 			unsigned long	start;
@@ -48,6 +37,18 @@ typedef struct {
 	};
 	unsigned char	buf[0];
 } logbuff_t;
+
+// v3 was copied directly from kernel/printk.c as of 3.10 kernel
+typedef struct {
+    u32 magic;
+    u64 ts_nsec;            /* timestamp in nanoseconds */
+    u16 len;                /* length of entire record */
+    u16 text_len;           /* length of text buffer */
+    u16 dict_len;           /* length of dictionary buffer */
+    u8 facility;            /* syslog facility */
+    u8 flags:5;             /* internal record flags */
+    u8 level:3;             /* syslog level */
+} logbuff_v3_header_t;
 
 int drv_logbuff_init (void);
 void logbuff_init_ptrs (void);
