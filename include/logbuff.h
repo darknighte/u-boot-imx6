@@ -38,7 +38,7 @@ typedef struct {
 	unsigned char	buf[0];
 } logbuff_t;
 
-// v3 was copied directly from kernel/printk.c as of 3.10 kernel
+// v3 log entry struct was copied directly from kernel/printk.c as of 3.10 kernel
 typedef struct {
     u32 magic;
     u64 ts_nsec;            /* timestamp in nanoseconds */
@@ -48,13 +48,29 @@ typedef struct {
     u8 facility;            /* syslog facility */
     u8 flags:5;             /* internal record flags */
     u8 level:3;             /* syslog level */
-} logbuff_v3_header_t;
+} logbuff_v3_log_entry_header_t;
+
+// This control block is intended to provide self checking information and
+// provide necessary logging information to the kernel.
+typedef struct {
+	u32 log_version;
+	u32 log_length;
+	u32 log_overhead_length;
+	u32 stored_cb_size;
+	u32 stored_log_entry_header_size;
+	void* first_log_byte_addr;
+	void* last_log_byte_addr;
+	logbuff_v3_log_entry_header_t* head;
+	logbuff_v3_log_entry_header_t* tail;
+	u32 magic;
+} logbuff_v3_cb_t;
 
 int drv_logbuff_init (void);
 void logbuff_init_ptrs (void);
 void logbuff_log(char *msg);
 void logbuff_reset (void);
 unsigned long logbuffer_base (void);
+void logbuff_printf ( const char *fmt, ... );
 
 #endif /* CONFIG_LOGBUFFER */
 
