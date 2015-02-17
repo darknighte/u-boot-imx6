@@ -199,6 +199,10 @@
 
 #if defined(CONFIG_SABRELITE)
 #define CONFIG_EXTRA_ENV_SETTINGS_BD_SL \
+	"logbase=0x3F784000\0" \
+	"logoverheadsize=0x400\0" \
+	"logsize=0x40000\0" \
+	"logversion=3\0" \
 	"args=mmc dev ${mmcdev}; run serargs; run gfxargs; run mmcargs\0" \
 	"console=ttymxc1\0" \
 	"fdt_high=0xffffffff\0" \
