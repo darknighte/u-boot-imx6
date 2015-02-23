@@ -58,10 +58,12 @@ typedef struct {
 	u32 log_overhead_length;
 	u32 stored_cb_size;
 	u32 stored_log_entry_header_size;
+	u64 log_msg_count;
 	void* min_log_addr;
 	void* max_log_addr;
 	logbuff_v3_log_entry_header_t* head;
 	logbuff_v3_log_entry_header_t* tail;
+	logbuff_v3_log_entry_header_t* last_used_byte;
 	u32 magic;
 } logbuff_v3_cb_t;
 

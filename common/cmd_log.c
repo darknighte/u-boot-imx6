@@ -152,10 +152,12 @@ void logbuff_reset(void)
 		log_cb->log_overhead_length = LOGBUFF_OVERHEAD;
 		log_cb->stored_cb_size = sizeof(logbuff_v3_cb_t);
 		log_cb->stored_log_entry_header_size = sizeof(logbuff_v3_log_entry_header_t);
+		log_cb->log_msg_count = 0;
 		log_cb->min_log_addr = (void*) (logbuffer_base());
 		log_cb->max_log_addr = ( log_cb->min_log_addr + LOGBUFF_LEN - 1 );
 		log_cb->head = log_cb->min_log_addr;
 		log_cb->tail = log_cb->head;
+		log_cb->last_used_byte = log_cb->head;
 
 		// Initialize the first entry and mark it "valid" with a magic value
 		memset ( log_cb->head, 0, sizeof(logbuff_v3_log_entry_header_t));
@@ -432,6 +434,9 @@ static void logbuff_printk_v3(const unsigned level, const const char *msg)
 			// Note: we keep room for at least one entry header as a continuation marker
 			if ( freespace < msg_length + log_cb->stored_log_entry_header_size )
 			{
+				// Keep a pointer to the last byte of the last valid record
+				log_cb->last_used_byte = (void*) log_cb->tail - 1;
+
 				// Write a continuation header
 				memset ( log_cb->tail, 0, log_cb->stored_log_entry_header_size );
 
@@ -439,6 +444,11 @@ static void logbuff_printk_v3(const unsigned level, const const char *msg)
 				// This means that the head (at the top) will have to move
 				log_cb->tail = log_cb->min_log_addr;
 				freespace = 0;
+			}
+			else
+			{
+				// Keep a pointer to the last byte of the last valid record
+				log_cb->last_used_byte = (void*) log_cb->tail + msg_length - 1;
 			}
 		}
 		else if ( log_cb->tail < log_cb->head )
@@ -469,6 +479,9 @@ static void logbuff_printk_v3(const unsigned level, const const char *msg)
 				// Is there enough space now?
 				if ( freespace < msg_length + log_cb->stored_log_entry_header_size )
 				{
+					// Keep a pointer to the last byte of the last valid record
+					log_cb->last_used_byte = (void*) log_cb->tail - 1;
+
 					// There isn't enough space even moving the head pointer,
 					// so write a continuation record and wrap to the top.
 					memset ( log_cb->tail, 0, log_cb->stored_log_entry_header_size );
@@ -483,6 +496,8 @@ static void logbuff_printk_v3(const unsigned level, const const char *msg)
 			// Add the current head's space to the freespace and increment the head
 			freespace += log_cb->head->len;
 			log_cb->head = (void*)log_cb->head + log_cb->head->len;
+			if ( log_cb->log_msg_count > 0 )
+				log_cb->log_msg_count--;
 		}
 	}
 
@@ -504,8 +519,15 @@ static void logbuff_printk_v3(const unsigned level, const const char *msg)
 		log_cb->tail->level = level;
 		memcpy ( ((void*)log_cb->tail) + log_cb->stored_log_entry_header_size, msg, log_cb->tail->text_len );
 
-		// Move the tail to the next location.
+		// Increment the message count & move the tail to the next location.
+		log_cb->log_msg_count++;
 		log_cb->tail = ((void*)log_cb->tail) + log_cb->tail->len;
+
+		if (firstpass)
+		{
+			// Point the last_used_byte to the end of the new record.
+			log_cb->last_used_byte = (void*) log_cb->tail - 1;
+		}
 	}
 }
 
@@ -608,7 +630,9 @@ static void logbuff_info_v3 ( void )
 	printf("log_cb->max_log_addr  = %08lx\n", log_cb->max_log_addr );
 	printf("LOGBUFF_MAGIC = %08lx\n", LOGBUFF_MAGIC);
 	printf("log_cb->magic = %08lx\n", log_cb->magic);
+	printf("log_cb->log_msg_count = %lld\n", log_cb->log_msg_count);
 	printf("log_cb->head->magic = %08lx\n", log_cb->head->magic);
 	printf("log_cb->head = %p\n", log_cb->head);
 	printf("log_cb->tail = %p\n", log_cb->tail);
+	printf("log_cb->last_used_byte = %p\n", log_cb->last_used_byte);
 }
