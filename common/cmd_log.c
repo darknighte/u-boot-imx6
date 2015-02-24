@@ -77,6 +77,34 @@ unsigned long __logbuffer_base(void)
 unsigned long logbuffer_base(void)
 __attribute__((weak, alias("__logbuffer_base")));
 
+unsigned long __logbuffer_size(void)
+{
+	unsigned long log_size = LOGBUFF_LEN;
+	char *s;
+
+	/* If set in the environment, overide the default log size */
+	if ((s = getenv ("logsize")) != NULL)
+		log_size = (unsigned long)simple_strtoul(s, NULL, 10);
+
+	return ( log_size );
+}
+unsigned long logbuffer_size(void)
+__attribute__((weak, alias("__logbuffer_size")));
+
+unsigned long __logbuffer_overhead_size(void)
+{
+	unsigned long log_overhead_size = LOGBUFF_OVERHEAD;
+	char *s;
+
+	/* If set in the environment, overide the default log overhead_size */
+	if ((s = getenv ("logoverheadsize")) != NULL)
+		log_overhead_size = (unsigned long)simple_strtoul(s, NULL, 10);
+
+	return ( log_overhead_size );
+}
+unsigned long logbuffer_overhead_size(void)
+__attribute__((weak, alias("__logbuffer_overhead_size")));
+
 void logbuff_init_ptrs(void)
 {
 	unsigned long tag;
@@ -98,12 +126,16 @@ void logbuff_init_ptrs(void)
 	{
 		// Locate the v3 log control block at the top of the log overhead area
 		// see common/image.c for lmb_reserve() call that matches this
-		log_cb = (logbuff_v3_cb_t *) (logbuffer_base() - LOGBUFF_OVERHEAD);
-		
+		// NOTE:
+		//   When this function runs, stored environment variables haven't loaded.
+		//   Instead it uses the hardcoded defaults, or ones set in the default config,
+		//   but not ones saved in the environment.
+		log_cb = (logbuff_v3_cb_t *) (logbuffer_base() - logbuffer_overhead_size());
+
 		// Check to ensure that CB values match compiled constants, if not reset
 		if ( log_cb->log_version != log_version ||
-				log_cb->log_length != LOGBUFF_LEN ||
-				log_cb->log_overhead_length != LOGBUFF_OVERHEAD ||
+				log_cb->log_length != logbuffer_size() ||
+				log_cb->log_overhead_length != logbuffer_overhead_size() ||
 				log_cb->stored_cb_size != sizeof(logbuff_v3_cb_t) ||
 				log_cb->stored_log_entry_header_size != sizeof(logbuff_v3_log_entry_header_t) ||
 				log_cb->min_log_addr != (logbuff_v3_log_entry_header_t*) (logbuffer_base()) ||
@@ -148,13 +180,13 @@ void logbuff_reset(void)
 
 		// Initialize the control block
 		log_cb->log_version = log_version;
-		log_cb->log_length = LOGBUFF_LEN;
-		log_cb->log_overhead_length = LOGBUFF_OVERHEAD;
+		log_cb->log_length = logbuffer_size();
+		log_cb->log_overhead_length = logbuffer_overhead_size();
 		log_cb->stored_cb_size = sizeof(logbuff_v3_cb_t);
 		log_cb->stored_log_entry_header_size = sizeof(logbuff_v3_log_entry_header_t);
 		log_cb->log_msg_count = 0;
 		log_cb->min_log_addr = (void*) (logbuffer_base());
-		log_cb->max_log_addr = ( log_cb->min_log_addr + LOGBUFF_LEN - 1 );
+		log_cb->max_log_addr = ( log_cb->min_log_addr + log_cb->log_length - 1 );
 		log_cb->head = log_cb->min_log_addr;
 		log_cb->tail = log_cb->head;
 		log_cb->last_used_byte = log_cb->head;
@@ -424,7 +456,7 @@ static void logbuff_printk_v3(const unsigned level, const const char *msg)
 			// How much space between the current tail and the end of the buffer?
 			freespace = log_cb->max_log_addr - (void*) log_cb->tail - 1;
 
-			if ( freespace > LOGBUFF_LEN )
+			if ( freespace > log_cb->log_length )
 			{
 				printf( "ERROR: " __FILE__ "[%d] freespace is out of range = %d\n", __LINE__, freespace );
 				return;
@@ -456,7 +488,7 @@ static void logbuff_printk_v3(const unsigned level, const const char *msg)
 			// Check if there is already enough space between tail and head
 			freespace = (void*)log_cb->head - (void*)log_cb->tail - 1;
 
-			if ( freespace > LOGBUFF_LEN )
+			if ( freespace > log_cb->log_length )
 			{
 				printf( "ERROR: " __FILE__ "[%d] freespace is out of range = %d\n", __LINE__, freespace );
 				return;
@@ -619,9 +651,9 @@ static void logbuff_info_v3 ( void )
 	printf("log_cb = %p\n", log_cb);
 	printf("log_cb->log_version = %d\n", log_cb->log_version );
 	printf("log_cb->log_length = %d\n", log_cb->log_length );
-	printf("LOGBUFF_LEN = %d\n", LOGBUFF_LEN);
+	printf("logbuffer_size = %d\n", logbuffer_size());
 	printf("log_cb->log_overhead_length = %d\n", log_cb->log_overhead_length );
-	printf("LOGBUFF_OVERHEAD = %d\n", LOGBUFF_OVERHEAD);
+	printf("logbuffer_overhead_size() = %d\n", logbuffer_overhead_size());
 	printf("log_cb->stored_cb_size = %d\n", log_cb->stored_cb_size );
 	printf("sizeof(logbuff_v3_cb_t) = %d\n", sizeof(logbuff_v3_cb_t) );
 	printf("log_cb->stored_log_entry_header_size = %d\n", log_cb->stored_log_entry_header_size );
