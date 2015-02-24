@@ -70,7 +70,7 @@ unsigned long __logbuffer_base(void)
 
 	/* If set in the environment, overide the default log base */
 	if ((s = getenv ("logbase")) != NULL)
-		log_base = (int)simple_strtoul(s, NULL, 10);
+		log_base = (unsigned long)simple_strtoul(s, NULL, 10);
 
 	return ( log_base );
 }
