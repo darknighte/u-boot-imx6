@@ -178,6 +178,15 @@ void logbuff_reset(void)
 	{
 		printf("Resetting the log with v3 settings\n");
 
+		// Re-assign the log control block
+		// see common/image.c for lmb_reserve() call that matches this
+		// NOTE:
+		//   When called by logbuff_init_ptrs(), stored env vars are not loaded.
+		//   Instead it uses the hardcoded defaults, or ones set in the default config,
+		//   but not ones saved in the environment.
+		//   Subsequent runs will take into account stored vars.
+		log_cb = (logbuff_v3_cb_t *) (logbuffer_base() - logbuffer_overhead_size());
+
 		// Initialize the control block
 		log_cb->log_version = log_version;
 		log_cb->log_length = logbuffer_size();
