@@ -644,27 +644,36 @@ void logbuff_printf ( const char *fmt, ... )
 
 static void logbuff_info_v3 ( void )
 {
-	printf("console_loglevel = %d\n", console_loglevel );
-	printf("default_message_loglevel = %d\n", default_message_loglevel );
-	printf("Calculated log_base = %08lx\n", CONFIG_SYS_SDRAM_BASE + get_effective_memsize() - LOGBUFF_LEN);
-	printf("logbuffer_base() = %08lx\n", logbuffer_base() );
-	printf("log_cb = %p\n", log_cb);
-	printf("log_cb->log_version = %d\n", log_cb->log_version );
-	printf("log_cb->log_length = %d\n", log_cb->log_length );
-	printf("logbuffer_size = %d\n", logbuffer_size());
-	printf("log_cb->log_overhead_length = %d\n", log_cb->log_overhead_length );
-	printf("logbuffer_overhead_size() = %d\n", logbuffer_overhead_size());
-	printf("log_cb->stored_cb_size = %d\n", log_cb->stored_cb_size );
-	printf("sizeof(logbuff_v3_cb_t) = %d\n", sizeof(logbuff_v3_cb_t) );
-	printf("log_cb->stored_log_entry_header_size = %d\n", log_cb->stored_log_entry_header_size );
-	printf("sizeof(logbuff_v3_log_entry_header_t) = %d\n", sizeof(logbuff_v3_log_entry_header_t) );
-	printf("log_cb->min_log_addr = %08lx\n", log_cb->min_log_addr );
-	printf("log_cb->max_log_addr  = %08lx\n", log_cb->max_log_addr );
-	printf("LOGBUFF_MAGIC = %08lx\n", LOGBUFF_MAGIC);
-	printf("log_cb->magic = %08lx\n", log_cb->magic);
-	printf("log_cb->log_msg_count = %lld\n", log_cb->log_msg_count);
-	printf("log_cb->head->magic = %08lx\n", log_cb->head->magic);
-	printf("log_cb->head = %p\n", log_cb->head);
-	printf("log_cb->tail = %p\n", log_cb->tail);
-	printf("log_cb->last_used_byte = %p\n", log_cb->last_used_byte);
+	if ( ! log_cb || ! log_cb->head  || ! log_cb->tail )
+	{
+		printf ( "Error: Invalid address detected in the log control block.  Resetting the log\n" );
+		return;
+	}
+
+	printf("Log levels: console = %d  :  default = %d\n",
+			console_loglevel, default_message_loglevel );
+	printf("Log version (calculated/stored) = %d/%d\n",
+			log_version, log_cb->log_version );
+	printf("Log base address (calculated/stored) = %08lx/%p\n",
+			logbuffer_base(), log_cb->min_log_addr );
+	printf("Log size (calculated/stored) = %ld/%d\n",
+			logbuffer_size(), log_cb->log_length );
+	printf("Log overhead size (calculated/stored) = %ld/%d\n",
+			logbuffer_overhead_size(), log_cb->log_overhead_length );
+	printf("Log control block size (calculated/stored) = %d/%d\n",
+			sizeof(logbuff_v3_cb_t), log_cb->stored_cb_size );
+	printf("Log entry header size (calculated/stored) = %d/%d\n",
+			sizeof(logbuff_v3_log_entry_header_t),
+			log_cb->stored_log_entry_header_size );
+	printf("Log control block magic value (calculated/stored) = %08x/%08x\n",
+			log_cb->magic, LOGBUFF_MAGIC);
+	printf("Log message count = %lld\n",
+			log_cb->log_msg_count);
+	printf("Log pointers: cb/head/tail/last used byte/max byte address = %p/%p/%p/%p/%p\n",
+			log_cb, log_cb->head, log_cb->tail,
+			log_cb->last_used_byte, log_cb->max_log_addr );
+	printf("Log head entry magic/length = %08x/%d\n",
+			log_cb->head->magic, log_cb->head->len);
+	printf("Log tail entry magic/length = %08x/%d\n",
+			log_cb->tail->magic, log_cb->tail->len);
 }
