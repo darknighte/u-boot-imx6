@@ -568,6 +568,14 @@ static void logbuff_show_v3( void )
 	logbuff_v3_log_entry_header_t * cur;
 	int i;
 
+	// Validate the log pointers
+	if ( ! log_cb || ! log_cb->head || ! log_cb->tail )
+	{
+		printf ("Error: log pointers are invalid.  Resetting the log\n");
+		logbuff_reset ();
+		return;
+	}
+
 	// Determine if this is the initial log entry
 	if ( log_cb->head == log_cb->tail && log_cb->head->len == 0 && log_cb->head->magic == LOGBUFF_MAGIC )
 		return;
@@ -575,8 +583,17 @@ static void logbuff_show_v3( void )
 	cur = log_cb->head;
 	do
 	{
+		// Validate the current record.
+		if ( ( cur->magic != LOGBUFF_MAGIC && cur->magic != 0 ) ||
+				( cur->magic == LOGBUFF_MAGIC && cur->len == 0 ) )
+		{
+			printf ("Error: Invalid entry detected in the log.  Resetting the log\n");
+			logbuff_reset();
+			return;
+		}
+
 		// Check for a continuation record
-		if ( cur->magic != LOGBUFF_MAGIC && cur->len == 0 )
+		if ( cur->magic == 0 && cur->len == 0 )
 		{
 			printf ("%p : 0x%16.16llx : 0x%4.4x : 0x%4.4x : 0x%2.2x : 0x%1.1x : Continuation Record\n",
 					cur, cur->ts_nsec, cur->len, cur->text_len, cur->facility, cur->level);
