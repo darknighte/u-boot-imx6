@@ -38,6 +38,7 @@ static void logbuff_puts(const char *s);
 static int logbuff_printk(const char *line);
 
 static char buf[1024];
+static char buf2[1024];
 
 /* This combination will not print messages with the default loglevel */
 static unsigned console_loglevel = 3;
@@ -305,4 +306,14 @@ static int logbuff_printk(const char *line)
 			msg_level = -1;
 	}
 	return i;
+}
+
+void logbuff_printf ( const char *fmt, ... )
+{
+	va_list	args;
+
+	va_start(args, fmt);
+	vsnprintf(buf2, sizeof(buf2), fmt, args);
+	va_end(args);
+	logbuff_printk(buf2);
 }
