@@ -43,6 +43,7 @@ void logbuff_init_ptrs (void);
 void logbuff_log(char *msg);
 void logbuff_reset (void);
 unsigned long logbuffer_base (void);
+void logbuff_printf(const char *fmt, ...);
 
 #endif /* CONFIG_LOGBUFFER */
 
