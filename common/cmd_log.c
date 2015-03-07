@@ -563,7 +563,7 @@ static void logbuff_printk_v3(const unsigned level, const const char *msg)
 
 		// Fill the log entry contents
 		log_cb->tail->magic = LOGBUFF_MAGIC;
-		log_cb->tail->ts_nsec = 0;
+		log_cb->tail->ts_nsec = get_timer_masked() * 1000;
 		log_cb->tail->text_len = text_length;
 		log_cb->tail->len = msg_length;
 		log_cb->tail->level = level;
