@@ -22,6 +22,10 @@
  * FIQ Stack: 00ebef7c
  */
 
+#ifdef CONFIG_TRACE
+#define DEBUG
+#endif
+
 #include <common.h>
 #include <command.h>
 #include <environment.h>
@@ -37,6 +41,7 @@
 #include <libfdt.h>
 #include <fdtdec.h>
 #include <post.h>
+#include <trace.h>
 #include <logbuff.h>
 #include <asm/sections.h>
 
@@ -229,6 +234,7 @@ static int mark_bootstage(void)
 }
 
 init_fnc_t *init_sequence[] = {
+	trace_early_init,
 	arch_cpu_init,		/* basic arch cpu dependent setup */
 	mark_bootstage,
 #ifdef CONFIG_OF_CONTROL
@@ -364,6 +370,13 @@ void board_init_f(ulong bootflag)
 	gd->fb_base = addr;
 #endif /* CONFIG_FB_ADDR */
 #endif /* CONFIG_LCD */
+
+#ifdef CONFIG_TRACE
+        addr -= CONFIG_TRACE_BUFFER_SIZE;
+        gd->trace_buff = (void *)addr;
+        debug("Reserving %dk for trace data at: %08lx\n",
+              CONFIG_TRACE_BUFFER_SIZE >> 10, addr);
+#endif
 
 	/*
 	 * reserve memory for U-Boot code, data & bss
@@ -520,6 +533,10 @@ void board_init_r(gd_t *id, ulong dest_addr)
 
 	/* Enable caches */
 	enable_caches();
+
+#ifdef CONFIG_TRACE
+        trace_init(gd->trace_buff, CONFIG_TRACE_BUFFER_SIZE);
+#endif
 
 	debug("monitor flash len: %08lX\n", monitor_flash_len);
 	board_init();	/* Setup chipselects */

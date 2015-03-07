@@ -28,4 +28,6 @@
 #define CONFIG_SYS_PL310_BASE	L2_PL310_BASE
 #endif
 
+#define CONFIG_MXC_GPT_HCLK
+ 
 #endif
