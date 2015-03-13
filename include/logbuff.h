@@ -50,22 +50,46 @@ typedef struct {
     u8 level:3;             /* syslog level */
 } logbuff_v3_log_entry_header_t;
 
-// This control block is intended to provide self checking information and
-// provide necessary logging information to the kernel.
+// This control block provides tracking offsets for the log and also, when
+// enabled via CONFIG_LOGBUFFER, it provides log sharing information to
+// the kernel. It was taken verbatim from printk.c, except #ifdefs.
+// NOTE:
+//   It assumes that the control block and the log buffer are contiguous.
+//   This requirement could be relaxed, but would complicate cmdline passing.
 typedef struct {
-	u32 log_version;
-	u32 log_length;
-	u32 log_overhead_length;
-	u32 stored_cb_size;
-	u32 stored_log_entry_header_size;
-	u64 log_msg_count;
-	void* min_log_addr;
-	void* max_log_addr;
-	logbuff_v3_log_entry_header_t* head;
-	logbuff_v3_log_entry_header_t* tail;
-	logbuff_v3_log_entry_header_t* last_used_byte;
-	u32 magic;
-} logbuff_v3_cb_t;
+        u32 log_version;
+        u32 log_length;
+        u32 log_overhead_length;
+        u32 stored_cb_size;
+        u32 stored_log_entry_header_size;
+	u32 log_virtual_address;
+	u32 log_physical_address;
+
+        /* index and sequence number of the first record stored in the buffer */
+        u64 log_first_seq;
+        u32 log_first_idx;
+
+        /* index and sequence number of the next record to store in the buffer */
+        u64 log_next_seq;
+        u32 log_next_idx;
+
+        /* the next printk record to read by syslog(READ) or /proc/kmsg */
+        u64 syslog_seq;
+        u32 syslog_idx;
+        u32 syslog_prev;
+        size_t syslog_partial;
+
+        /* the next printk record to write to the console */
+        u64 console_seq;
+        u32 console_idx;
+        u32 console_prev;
+
+        /* the next printk record to read after the last 'clear' command */
+        u64 clear_seq;
+        u32 clear_idx;
+
+        u32 magic;
+} log_cb_t;
 
 int drv_logbuff_init (void);
 void logbuff_init_ptrs (void);
