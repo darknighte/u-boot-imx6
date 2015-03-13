@@ -51,7 +51,8 @@ typedef struct {
 } logbuff_v3_log_entry_header_t;
 
 // This control block is intended to provide self checking information and
-// provide necessary logging information to the kernel.
+// provide necessary logging information to the kernel.  It must match the
+// structure in the kernel, or bad things happen.
 typedef struct {
 	u32 log_version;
 	u32 log_length;
@@ -64,6 +65,19 @@ typedef struct {
 	logbuff_v3_log_entry_header_t* head;
 	logbuff_v3_log_entry_header_t* tail;
 	logbuff_v3_log_entry_header_t* last_used_byte;
+	u64 log_first_seq;
+	u32 log_first_idx;
+	u64 log_next_seq;
+	u32 log_next_idx;
+	u64 syslog_seq;
+	u32 syslog_idx;
+	enum log_flags syslog_prev;
+	size_t syslog_partial;
+	u64 console_seq;
+	u32 console_idx;
+	enum log_flags console_prev;
+	u64 clear_seq;
+	u32 clear_idx;
 	u32 magic;
 } logbuff_v3_cb_t;
 
