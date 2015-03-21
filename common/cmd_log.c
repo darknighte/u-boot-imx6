@@ -196,7 +196,7 @@ void logbuff_reset(void)
 		log_cb->log_physical_address = logbuffer_base();
 
 		// Initialize the first entry and mark it "valid" with a magic value
-		log_buff_v3_log_entry_header_t *first = (logbuff_v3_log_entry_header_t*) log_cb->log_physical_address;
+		logbuff_v3_log_entry_header_t *first = (logbuff_v3_log_entry_header_t*) log_cb->log_physical_address;
 		memset ( first, 0, sizeof(logbuff_v3_log_entry_header_t));
 		first->magic = LOGBUFF_MAGIC;
 
@@ -444,123 +444,99 @@ void logbuff_printf ( const char *fmt, ... )
 }
 
 /*
- * Write a log entry with the new kernel log structure
- */
-static void logbuff_printk_v3(const unsigned level, const const char *msg)
+ get next record; idx must point to valid msg
+ NOTE: code from linux kernel printk.c::log_next()
+*/
+static u32 log_next(const log_cb_t * const cb, const u32 idx)
 {
+	logbuff_v3_log_entry_header_t *msg =
+		(logbuff_v3_log_entry_header_t *)
+		(cb->log_physical_address + idx);
+
+	/* length == 0 indicates the end of the buffer; wrap */
+	/*
+	 * A length == 0 record is the end of buffer marker. Wrap around and
+	 * read the message at the start of the buffer as *this* one, and
+	 * return the one after that.
+	 */
+	if (!msg->len) {
+		msg = (logbuff_v3_log_entry_header_t *)cb->log_physical_address;
+		return msg->len;
+	}
+	return idx + msg->len;
+}
+
+/*
+ * Write a log entry with the new kernel log structure
+ * NOTE: code from linux kernel printk.c::log_store()
+ */
+static void logbuff_printk_v3(const unsigned level,
+		const const char *msg)
+{
+	u32 size, pad_len;
 	const u16 text_length = strlen ( msg );
-	logbuff_v3_log_entry_header_t * cur;
-	u32 freespace = 0;
-        u64 cur_seq;
-	u8 firstpass;
 
 	// Calculate the total message record length with padding
-	u16 msg_length =
-		( log_cb->stored_log_entry_header_size + text_length + LOG_ALIGN - 1 ) & ~(LOG_ALIGN - 1);
+	size = sizeof(logbuff_v3_log_entry_header_t) + text_length;
+	pad_len = (-size) & (LOG_ALIGN - 1);
+	size += pad_len;
 
-	// Determine if this is the initial log entry
-	cur = (log_cb_t *) (log_cb->log_physical_address + log_cb->log_first_idx);
-
-	firstpass = ( log_cb->log_first_idx == log_cb->log_next_idx &&
-			cur->len == 0 && cur->magic == LOGBUFF_MAGIC );
-
-	// Ignore this processing for the first pass
-	if ( ! firstpass )
+	while (log_cb->log_first_seq < log_cb->log_next_seq)
 	{
-		// Check the relative position of the head and tail
-		if ( log_cb->tail > log_cb->head )
-		{
-			// How much space between the current tail and the end of the buffer?
-			freespace = log_cb->max_log_addr - (void*) log_cb->tail - 1;
+		u32 free;
 
-			if ( freespace > log_cb->log_length )
-			{
-				printf( "ERROR: " __FILE__ "[%d] freespace is out of range = %d\n", __LINE__, freespace );
-				return;
-			}
+		if (log_cb->log_next_idx > log_cb->log_first_idx)
+			free = max(log_cb->log_length -
+					log_cb->log_next_idx,
+					log_cb->log_first_idx);
+		else
+			free = log_cb->log_first_idx -
+				log_cb->log_next_idx;
 
-			// Check if the tail has to wrap because the new record is too long
-			// Note: we keep room for at least one entry header as a continuation marker
-			if ( freespace < msg_length + log_cb->stored_log_entry_header_size )
-			{
-				// Write a continuation header
-				memset ( log_cb->tail, 0, log_cb->stored_log_entry_header_size );
+		if (free > size + log_cb->stored_log_entry_header_size)
+			break;
 
-				// Move tail to the top and reset freespace
-				// This means that the head (at the top) will have to move
-				log_cb->tail = log_cb->log_physical_address;
-				freespace = 0;
-			}
-		}
-		else if ( log_cb->tail < log_cb->head )
-		{
-			// Check if there is already enough space between tail and head
-			freespace = (void*)log_cb->head - (void*)log_cb->tail - 1;
-
-			if ( freespace > log_cb->log_length )
-			{
-				printf( "ERROR: " __FILE__ "[%d] freespace is out of range = %d\n", __LINE__, freespace );
-				return;
-			}
-		}
-
-		// If there isn't enough space for the entry at this point, then the
-		// head has to move.  Walk entries until there is room and wrap, as needed.
-		while ( freespace < msg_length )
-		{
-			// Is the head pointing to a continuation record?
-			if ( log_cb->head->magic != LOGBUFF_MAGIC && log_cb->head->len == 0 )
-			{
-				// The head has to wrap, move it to the top.
-				log_cb->head = log_cb->log_physical_address;
-
-				// Consider all buffer space to the end free.
-				freespace = log_cb->max_log_addr - (void*) log_cb->tail;
-
-				// Is there enough space now?
-				if ( freespace < msg_length + log_cb->stored_log_entry_header_size )
-				{
-					// There isn't enough space even moving the head pointer,
-					// so write a continuation record and wrap to the top.
-					memset ( log_cb->tail, 0, log_cb->stored_log_entry_header_size );
-
-					// Move tail to the top and reset freespace
-					// This means that the head (at the top) will have to move
-					log_cb->tail = log_cb->log_physical_address;
-					freespace = 0;
-				}
-			}
-
-			// Add the current head's space to the freespace and increment the head
-			freespace += log_cb->head->len;
-			log_cb->head = (void*)log_cb->head + log_cb->head->len;
-			if ( log_cb->log_first_seq > 0 )
-				log_cb->log_first_seq--;
-		}
-	}
-
-	// Ensure the new message will *not* overrun our buffer
-	if ( ((void*)log_cb->tail) + msg_length > log_cb->max_log_addr )
-	{
-		printf ("ERROR: Attempting to write past the end of the log buffer\n");
-	}
-	else
-	{
-		// Initialize the log entry header
-		memset ( log_cb->tail, 0, log_cb->stored_log_entry_header_size );
-
-		// Fill the log entry contents
-		log_cb->tail->magic = LOGBUFF_MAGIC;
-		log_cb->tail->ts_nsec = get_timer_masked() * 1000;
-		log_cb->tail->text_len = text_length;
-		log_cb->tail->len = msg_length;
-		log_cb->tail->level = level;
-		memcpy ( ((void*)log_cb->tail) + log_cb->stored_log_entry_header_size, msg, log_cb->tail->text_len );
-
-		// Increment the message count & move the tail to the next location.
+		/* drop old messages until we have enough contiuous space */
+		log_cb->log_first_idx =
+			log_next(log_cb, log_cb->log_first_idx);
 		log_cb->log_first_seq++;
-		log_cb->tail = ((void*)log_cb->tail) + log_cb->tail->len;
 	}
+
+	// Pointer to next message to write
+	logbuff_v3_log_entry_header_t *next =
+		log_cb->log_physical_address + log_cb->log_next_idx;
+
+	if (log_cb->log_next_idx +
+			size +
+			log_cb->stored_log_entry_header_size >=
+			log_cb->log_length)
+	{
+		/*
+		 * This message + an additional empty header does not fit
+		 * at the end of the buffer. Add an empty header with len == 0
+		 * to signify a wrap around.
+		 */
+		memset ( next, 0, log_cb->stored_log_entry_header_size);
+		log_cb->log_next_idx = 0;
+		next = log_cb->log_physical_address;
+	}
+
+	// Initialize the log entry
+	memset ( next, 0, size );
+
+	// Fill the log entry contents
+	next->ts_nsec = get_timer_masked() * 1000;
+	next->text_len = text_length;
+	next->len = size;
+	next->level = level;
+	memcpy ( ((void*)next) + log_cb->stored_log_entry_header_size,
+			msg,
+			text_length );
+	next->magic = LOGBUFF_MAGIC;
+
+	// Increment the message count & update the next index.
+	log_cb->log_next_idx += next->len;
+	log_cb->log_next_seq++;
 }
 
 static void logbuff_show_v3( void )
@@ -664,7 +640,9 @@ static void logbuff_append_v3 ( int argc, char * const argv[] )
 
 static void logbuff_info_v3 ( void )
 {
-	log_cb_t * first, next;
+	log_cb_t *first, *next;
+	logbuff_v3_log_entry_header_t *firstmsg, *nextmsg;
+        
 
 	if ( ! log_cb ||
 			! log_cb->log_physical_address ||
@@ -682,6 +660,17 @@ static void logbuff_info_v3 ( void )
 
 	first = (log_cb_t *) (log_cb->log_physical_address + log_cb->log_first_idx);
 	next = (log_cb_t *) (log_cb->log_physical_address + log_cb->log_next_idx);
+	firstmsg =
+		(logbuff_v3_log_entry_header_t *)
+		(log_cb->log_physical_address +
+		 log_cb->log_first_idx +
+		 log_cb->stored_log_entry_header_size );
+
+	nextmsg =
+		(logbuff_v3_log_entry_header_t *)
+		(log_cb->log_physical_address +
+		 log_cb->log_next_idx +
+		 log_cb->stored_log_entry_header_size );
 
 	printf("Log levels: console = %d  :  default = %d\n",
 			console_loglevel, default_message_loglevel );
@@ -700,8 +689,8 @@ static void logbuff_info_v3 ( void )
 			log_cb->stored_log_entry_header_size );
 	printf("Log control block magic (calculated/stored) = %08x/%08x\n",
 			log_cb->magic, LOGBUFF_MAGIC);
-	printf("Log sequence numbers: first/next/syslog/console/clear = ""
-			%lld/%lld/%lld/%lld/%lld\n",
+	printf("Log sequence numbers: first/next/syslog/console/clear = "
+			"%lld/%lld/%lld/%lld/%lld\n",
 			log_cb->log_first_seq, log_cb->log_next_seq,
 			log_cb->syslog_seq, log_cb->console_seq,
 			log_cb->clear_seq);
@@ -711,7 +700,7 @@ static void logbuff_info_v3 ( void )
 			log_cb->syslog_idx, log_cb->console_idx,
 			log_cb->clear_idx);
 	printf("Log first entry magic/length = %08x/%d\n",
-			first->magic, first->len);
+			firstmsg->magic, firstmsg->len);
 	printf("Log next entry magic/length = %08x/%d\n",
-			next->magic, next->len);
+			nextmsg->magic, nextmsg->len);
 }

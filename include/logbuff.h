@@ -76,13 +76,13 @@ typedef struct {
         /* the next printk record to read by syslog(READ) or /proc/kmsg */
         u64 syslog_seq;
         u32 syslog_idx;
-        enum log_flags syslog_prev;
+        u32 syslog_prev;
         size_t syslog_partial;
 
         /* the next printk record to write to the console */
         u64 console_seq;
         u32 console_idx;
-        enum log_flags console_prev;
+        u32 console_prev;
 
         /* the next printk record to read after the last 'clear' command */
         u64 clear_seq;
