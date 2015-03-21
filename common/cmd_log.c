@@ -567,7 +567,7 @@ static void logbuff_show_v3( void )
 		return;
 
 	for ( cur_seq = log_cb->log_first_seq;
-			cur_seq <= log_cb->log_next_seq;
+			cur_seq < log_cb->log_next_seq;
 			cur_seq++ )
 	{
 		// Validate the current record.
@@ -640,9 +640,7 @@ static void logbuff_append_v3 ( int argc, char * const argv[] )
 
 static void logbuff_info_v3 ( void )
 {
-	log_cb_t *first, *next;
-	logbuff_v3_log_entry_header_t *firstmsg, *nextmsg;
-        
+	logbuff_v3_log_entry_header_t *first, *next;
 
 	if ( ! log_cb ||
 			! log_cb->log_physical_address ||
@@ -658,19 +656,8 @@ static void logbuff_info_v3 ( void )
 		return;
 	}
 
-	first = (log_cb_t *) (log_cb->log_physical_address + log_cb->log_first_idx);
-	next = (log_cb_t *) (log_cb->log_physical_address + log_cb->log_next_idx);
-	firstmsg =
-		(logbuff_v3_log_entry_header_t *)
-		(log_cb->log_physical_address +
-		 log_cb->log_first_idx +
-		 log_cb->stored_log_entry_header_size );
-
-	nextmsg =
-		(logbuff_v3_log_entry_header_t *)
-		(log_cb->log_physical_address +
-		 log_cb->log_next_idx +
-		 log_cb->stored_log_entry_header_size );
+	first = (logbuff_v3_log_entry_header_t *) (log_cb->log_physical_address + log_cb->log_first_idx);
+	next = (logbuff_v3_log_entry_header_t *) (log_cb->log_physical_address + log_cb->log_next_idx);
 
 	printf("Log levels: console = %d  :  default = %d\n",
 			console_loglevel, default_message_loglevel );
@@ -700,7 +687,7 @@ static void logbuff_info_v3 ( void )
 			log_cb->syslog_idx, log_cb->console_idx,
 			log_cb->clear_idx);
 	printf("Log first entry magic/length = %08x/%d\n",
-			firstmsg->magic, firstmsg->len);
+			first->magic, first->len);
 	printf("Log next entry magic/length = %08x/%d\n",
-			nextmsg->magic, nextmsg->len);
+			next->magic, next->len);
 }
