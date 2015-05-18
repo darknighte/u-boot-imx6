@@ -41,6 +41,18 @@ static void logbuff_append_v3(int argc, char *const argv[]);
 static void logbuff_printk_v3(const unsigned level, const char *msg);
 static void logbuff_info_v3(void);
 static void logbuff_show_v3(void);
+static void logbuff_printk_v3_write(const logbuff_v3_log_entry_header_t * hdr,
+				    const char *msg);
+
+#ifdef CONFIG_LOGBUFFER_EARLY
+static void early_logbuff_printk_v3(const unsigned level, const char *msg);
+
+#ifndef CONFIG_EARLY_LOGBUFF_ADDR
+#define CONFIG_EARLY_LOGBUFF_ADDR 0x20000000
+#endif
+#ifndef CONFIG_EARLY_LOGBUFF_SZ
+#define CONFIG_EARLY_LOGBUFF_SZ (8 << 20)
+#endif
 
 static char buf[1024];
 static char buf2[1024];
@@ -108,6 +120,23 @@ unsigned long __logbuffer_overhead_size(void)
 unsigned long logbuffer_overhead_size(void)
     __attribute__ ((weak, alias("__logbuffer_overhead_size")));
 
+#ifdef CONFIG_LOGBUFFER_EARLY
+void logbuff_copy_early_buffer(void)
+{
+	char *p = (char *)CONFIG_EARLY_LOGBUFF_ADDR;
+
+	if (log_version != 3)
+		return;
+
+	while (p < (char *)CONFIG_EARLY_LOGBUFF_ADDR + gd->early_logbuff_idx) {
+		logbuff_printk_v3_write((logbuff_v3_log_entry_header_t *) p,
+					(p +
+					 log_cb->stored_log_entry_header_size));
+		p += ((logbuff_v3_log_entry_header_t *) p)->len;
+	}
+}
+#endif
+
 void logbuff_init_ptrs(void)
 {
 	unsigned long tag;
@@ -124,6 +153,8 @@ void logbuff_init_ptrs(void)
 	/* Set up log version */
 	if ((s = getenv ("logversion")) != NULL)
 		log_version = (int)simple_strtoul(s, NULL, 10);
+
+	gd->logbuff_suppress_printk = 0;
 
 	if (log_version == 3) {
 		/*
@@ -150,6 +181,12 @@ void logbuff_init_ptrs(void)
 		}
 
 		gd->flags |= GD_FLG_LOGINIT;
+
+#ifdef CONFIG_LOGBUFFER_EARLY
+		/* Copy early messages to the logbuff */
+		logbuff_copy_early_buffer();
+#endif
+
 		return;
 	}
 	if (log_version == 2)
@@ -175,6 +212,22 @@ void logbuff_init_ptrs(void)
 
 	gd->flags |= GD_FLG_LOGINIT;
 }
+
+int early_logbuff_init_ptrs(void)
+{
+	char *s;
+
+	/* Set up log version */
+	if ((s = getenv("logversion")) != NULL)
+		log_version = (int)simple_strtoul(s, NULL, 10);
+	if ((s = getenv("loglevel")) != NULL)
+		console_loglevel = (int)simple_strtoul(s, NULL, 10);
+
+	gd->early_logbuff_idx = 0;
+	gd->logbuff_suppress_printk = 0;
+	return 0;
+}
+#endif
 
 void logbuff_reset(void)
 {
@@ -314,8 +367,10 @@ int do_log(cmd_tbl_t *cmdtp, int flag, int argc, char * const argv[])
 
 	case 2:
 		if (strcmp(argv[1], "show") == 0) {
+			gd->logbuff_suppress_printk = 1;
 			if (log_version == 3) {
 				logbuff_show_v3();
+				gd->logbuff_suppress_printk = 0;
 				return 0;
 			}
 			if (log_version == 2) {
@@ -331,6 +386,7 @@ int do_log(cmd_tbl_t *cmdtp, int flag, int argc, char * const argv[])
 				s = lbuf + ((start + i) & LOGBUFF_MASK);
 				putc(*s);
 			}
+			gd->logbuff_suppress_printk = 0;
 			return 0;
 		} else if (strcmp(argv[1], "reset") == 0) {
 			logbuff_reset();
@@ -382,6 +438,9 @@ static int logbuff_printk(const char *line)
 	int line_feed;
 	static signed char msg_level = -1;
 
+	if (gd->logbuff_suppress_printk)
+		return 0;
+
 	strcpy(buf + 3, line);
 	i = strlen(line);
 	buf_end = buf + 3 + i;
@@ -404,7 +463,14 @@ static int logbuff_printk(const char *line)
 			msg_level = p[1] - '0';
 		}
 		if (log_version == 3) {
-			logbuff_printk_v3(msg_level, msg);
+			if ((gd->flags & GD_FLG_LOGINIT))
+				logbuff_printk_v3(msg_level, msg);
+			else
+#ifdef CONFIG_LOGBUFFER_EARLY
+				early_logbuff_printk_v3(msg_level, msg);
+#else
+				return 0;
+#endif
 
 			if (msg_level < console_loglevel)
 				printf("%s\n", msg);
@@ -412,6 +478,8 @@ static int logbuff_printk(const char *line)
 			msg_level = -1;
 			break;
 		}
+		if (!(gd->flags & GD_FLG_LOGINIT))
+			return 0;
 		line_feed = 0;
 		for (; p < buf_end; p++) {
 			if (log_version == 2) {
@@ -476,20 +544,48 @@ static u32 log_next(const log_cb_t * const cb, const u32 idx)
 	return idx + msg->len;
 }
 
-/*
-  * Write a log entry with the new kernel log structure
- * NOTE: code from linux kernel printk.c::log_store()
-  */
-static void logbuff_printk_v3(const unsigned level, const const char *msg)
+#ifdef CONFIG_LOGBUFFER_EARLY
+static void early_logbuff_printk_v3(const unsigned level, const char *msg)
 {
+	char *buffer;
+	u16 text_length;
 	u32 size, pad_len;
-	const u16 text_length = strlen(msg);
 
-	/* Calculate the total message record length with padding */
+	/* Only supports v3 */
+	if (log_version != 3)
+		return;
+
+	buffer = (char *)CONFIG_EARLY_LOGBUFF_ADDR + gd->early_logbuff_idx;
+	text_length = strlen(msg);
 	size = sizeof(logbuff_v3_log_entry_header_t) + text_length;
 	pad_len = (-size) & (LOG_ALIGN - 1);
 	size += pad_len;
 
+	/* Check for available space */
+	if ((gd->early_logbuff_idx + size) >= CONFIG_EARLY_LOGBUFF_SZ)
+		return;
+
+	logbuff_v3_log_entry_header_t *next =
+	    (logbuff_v3_log_entry_header_t *) buffer;
+
+	memset(next, 0, size);
+
+	/* Fill the log entry contents */
+	next->ts_nsec = (u64) timer_get_us() * 1000;
+	next->text_len = text_length;
+	next->len = size;
+	next->level = level;
+	memcpy(((void *)next) + sizeof(logbuff_v3_log_entry_header_t),
+	       msg, text_length);
+	next->magic = LOGBUFF_MAGIC;
+
+	gd->early_logbuff_idx += size;
+}
+#endif
+
+static void logbuff_printk_v3_write(const logbuff_v3_log_entry_header_t * hdr,
+				    const char *msg)
+{
 	while (log_cb->log_first_seq < log_cb->log_next_seq) {
 		u32 free;
 
@@ -499,7 +595,7 @@ static void logbuff_printk_v3(const unsigned level, const const char *msg)
 		else
 			free = log_cb->log_first_idx - log_cb->log_next_idx;
 
-		if (free > size + log_cb->stored_log_entry_header_size)
+		if (free > hdr->len + log_cb->stored_log_entry_header_size)
 			break;
 
 		/* drop old messages until we have enough contiuous space */
@@ -508,11 +604,13 @@ static void logbuff_printk_v3(const unsigned level, const const char *msg)
 	}
 
 	/* Pointer to next message to write */
-	logbuff_v3_log_entry_header_t *next = (logbuff_v3_log_entry_header_t *)
-	    (log_cb->log_physical_address + log_cb->log_next_idx);
+	logbuff_v3_log_entry_header_t *next =
+	    (logbuff_v3_log_entry_header_t *) (log_cb->log_physical_address +
+					       log_cb->log_next_idx);
 
 	if (log_cb->log_next_idx +
-	    size + log_cb->stored_log_entry_header_size >= log_cb->log_length) {
+	    hdr->len +
+	    log_cb->stored_log_entry_header_size >= log_cb->log_length) {
 		/*
 		 * This message + an additional empty header does not fit
 		 * at the end of the buffer. Add an empty header with len == 0
@@ -521,23 +619,47 @@ static void logbuff_printk_v3(const unsigned level, const const char *msg)
 		memset(next, 0, log_cb->stored_log_entry_header_size);
 		log_cb->log_next_idx = 0;
 		next = (logbuff_v3_log_entry_header_t *)
-		    (log_cb->log_physical_address);
+		    log_cb->log_physical_address;
 	}
+
 	/* Initialize the log entry */
-	memset(next, 0, size);
+	memset(next, 0, hdr->len);
 
 	/* Fill the log entry contents */
-	next->ts_nsec = get_timer_masked() * 1000;
-	next->text_len = text_length;
-	next->len = size;
-	next->level = level;
+	memcpy(next, hdr, log_cb->stored_log_entry_header_size);
 	memcpy(((void *)next) + log_cb->stored_log_entry_header_size,
-	       msg, text_length);
-	next->magic = LOGBUFF_MAGIC;
+	       msg, hdr->text_len);
 
 	/* Increment the message count & update the next index. */
 	log_cb->log_next_idx += next->len;
 	log_cb->log_next_seq++;
+}
+
+/*
+  * Write a log entry with the new kernel log structure
+ * NOTE: code from linux kernel printk.c::log_store()
+  */
+static void logbuff_printk_v3(const unsigned level, const const char *msg)
+{
+	u32 size, pad_len;
+	const u16 text_length = strlen(msg);
+	logbuff_v3_log_entry_header_t hdr;
+
+	/* Calculate the total message record length with padding */
+	size = sizeof(logbuff_v3_log_entry_header_t) + text_length;
+	pad_len = (-size) & (LOG_ALIGN - 1);
+	size += pad_len;
+
+	memset(&hdr, 0, log_cb->stored_log_entry_header_size);
+
+	/* Fill the log entry contents */
+	hdr.ts_nsec = (u64) timer_get_us() * 1000;
+	hdr.text_len = text_length;
+	hdr.len = size;
+	hdr.level = level;
+	hdr.magic = LOGBUFF_MAGIC;
+
+	logbuff_printk_v3_write(&hdr, msg);
 }
 
 static void logbuff_show_v3(void)
@@ -650,7 +772,8 @@ static void logbuff_info_v3(void)
 	    log_cb->syslog_idx > log_cb->log_length ||
 	    log_cb->console_idx > log_cb->log_length ||
 	    log_cb->clear_idx > log_cb->log_length) {
-		printf("Error: log pointers are invalid.  Resetting the log\n");
+		printf("Error: Invalid address detected in the log control "
+		       "block.  Resetting the log\n");
 		logbuff_reset();
 		return;
 	}

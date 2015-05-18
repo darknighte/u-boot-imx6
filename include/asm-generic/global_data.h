@@ -48,6 +48,12 @@ typedef struct global_data {
 #ifdef CONFIG_PRE_CONSOLE_BUFFER
 	unsigned long precon_buf_idx;	/* Pre-Console buffer index */
 #endif
+#ifdef CONFIG_LOGBUFFER_EARLY
+	unsigned long early_logbuff_idx;	/* Early console logbuf index */
+#endif
+#ifdef CONFIG_LOGBUFFER
+	unsigned long logbuff_suppress_printk;	/* suppresses write to logbuff */
+#endif
 	unsigned long env_addr;	/* Address  of Environment struct */
 	unsigned long env_valid;	/* Checksum of Environment valid? */
 

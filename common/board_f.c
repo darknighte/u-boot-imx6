@@ -859,6 +859,9 @@ static init_fnc_t init_sequence_f[] = {
 #if defined(CONFIG_X86) && defined(CONFIG_HAVE_FSP)
 	x86_fsp_init,
 #endif
+#ifdef CONFIG_LOGBUFFER_EARLY
+       early_logbuff_init_ptrs,
+#endif
 	arch_cpu_init,		/* basic arch cpu dependent setup */
 	initf_dm,
 	arch_cpu_init_dm,

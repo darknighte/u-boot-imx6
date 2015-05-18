@@ -16,8 +16,23 @@
 #include <stdio_dev.h>
 #include <exports.h>
 #include <environment.h>
+#include <logbuff.h>
 
 DECLARE_GLOBAL_DATA_PTR;
+
+#if defined(CONFIG_LOGBUFFER_CONSOLE) && !defined(CONFIG_SPL_BUILD)
+static void console_logbuff_puts(const char *s)
+{
+	/* Truncate very long messages */
+	if (strlen(s) > 1000) {
+		char t[1001];
+		strncpy(t, s, 1000);
+		t[1000] = '\0';
+		logbuff_printf(t);
+	} else
+		logbuff_printf(s);
+}
+#endif
 
 static int on_console(const char *name, const char *value, enum env_op op,
 	int flags)
@@ -333,6 +348,10 @@ void fputc(int file, const char c)
 
 void fputs(int file, const char *s)
 {
+#if defined(CONFIG_LOGBUFFER_CONSOLE) && !defined(CONFIG_SPL_BUILD)
+	if (file == stderr)
+		console_logbuff_puts(s);
+#endif
 	if (file < MAX_FILES)
 		console_puts(file, s);
 }
@@ -503,6 +522,11 @@ void putc(const char c)
 
 void puts(const char *s)
 {
+
+#if defined(CONFIG_LOGBUFFER_CONSOLE) && !defined(CONFIG_SPL_BUILD)
+	console_logbuff_puts(s);
+#endif
+
 #ifdef CONFIG_SANDBOX
 	if (!gd || !(gd->flags & GD_FLG_SERIAL_READY)) {
 		os_puts(s);
