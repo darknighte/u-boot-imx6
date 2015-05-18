@@ -27,7 +27,7 @@ typedef struct global_data {
 	bd_t *bd;
 	unsigned long flags;
 	unsigned int baudrate;
-	unsigned long cpu_clk;	/* CPU clock in Hz!		*/
+	unsigned long cpu_clk;	/* CPU clock in Hz!             */
 	unsigned long bus_clk;
 	/* We cannot bracket this with CONFIG_PCI due to mpc5xxx */
 	unsigned long pci_clk;
@@ -36,9 +36,9 @@ typedef struct global_data {
 	unsigned long fb_base;	/* Base address of framebuffer mem */
 #endif
 #if defined(CONFIG_POST) || defined(CONFIG_LOGBUFFER)
-	unsigned long post_log_word;  /* Record POST activities */
-	unsigned long post_log_res; /* success of POST test */
-	unsigned long post_init_f_time;  /* When post_init_f started */
+	unsigned long post_log_word;	/* Record POST activities */
+	unsigned long post_log_res;	/* success of POST test */
+	unsigned long post_init_f_time;	/* When post_init_f started */
 #endif
 #ifdef CONFIG_BOARD_TYPES
 	unsigned long board_type;
@@ -46,6 +46,12 @@ typedef struct global_data {
 	unsigned long have_console;	/* serial_init() was called */
 #ifdef CONFIG_PRE_CONSOLE_BUFFER
 	unsigned long precon_buf_idx;	/* Pre-Console buffer index */
+#endif
+#ifdef CONFIG_LOGBUFFER_EARLY
+	unsigned long early_logbuff_idx;	/* Early console logbuf index */
+#endif
+#ifdef CONFIG_LOGBUFFER
+	unsigned long logbuff_suppress_printk;	/* suppresses write to logbuff */
 #endif
 #ifdef CONFIG_MODEM_SUPPORT
 	unsigned long do_mdm_init;
@@ -59,30 +65,30 @@ typedef struct global_data {
 	unsigned long relocaddr;	/* Start address of U-Boot in RAM */
 	phys_size_t ram_size;	/* RAM size */
 	unsigned long mon_len;	/* monitor len */
-	unsigned long irq_sp;		/* irq stack pointer */
+	unsigned long irq_sp;	/* irq stack pointer */
 	unsigned long start_addr_sp;	/* start_addr_stackpointer */
 	unsigned long reloc_off;
 	struct global_data *new_gd;	/* relocated global data */
 
 #ifdef CONFIG_DM
-	struct udevice	*dm_root;	/* Root instance for Driver Model */
-	struct udevice	*dm_root_f;	/* Pre-relocation root instance */
+	struct udevice *dm_root;	/* Root instance for Driver Model */
+	struct udevice *dm_root_f;	/* Pre-relocation root instance */
 	struct list_head uclass_root;	/* Head of core tree */
 #endif
 #ifdef CONFIG_TIMER
-	struct udevice	*timer;	/* Timer instance for Driver Model */
+	struct udevice *timer;	/* Timer instance for Driver Model */
 #endif
 
 	const void *fdt_blob;	/* Our device tree, NULL if none */
 	void *new_fdt;		/* Relocated FDT */
 	unsigned long fdt_size;	/* Space reserved for relocated FDT */
-	struct jt_funcs *jt;		/* jump table */
+	struct jt_funcs *jt;	/* jump table */
 	char env_buf[32];	/* buffer for getenv() before reloc. */
 #ifdef CONFIG_TRACE
-	void		*trace_buff;	/* The trace buffer */
+	void *trace_buff;	/* The trace buffer */
 #endif
 #if defined(CONFIG_SYS_I2C)
-	int		cur_i2c_bus;	/* current used i2c bus */
+	int cur_i2c_bus;	/* current used i2c bus */
 #endif
 #ifdef CONFIG_SYS_I2C_MXC
 	void *srdata[10];
@@ -109,17 +115,17 @@ typedef struct global_data {
 /*
  * Global Data Flags - the top 16 bits are reserved for arch-specific flags
  */
-#define GD_FLG_RELOC		0x00001	/* Code was relocated to RAM	   */
+#define GD_FLG_RELOC		0x00001	/* Code was relocated to RAM       */
 #define GD_FLG_DEVINIT		0x00002	/* Devices have been initialized   */
-#define GD_FLG_SILENT		0x00004	/* Silent mode			   */
-#define GD_FLG_POSTFAIL		0x00008	/* Critical POST test failed	   */
-#define GD_FLG_POSTSTOP		0x00010	/* POST seqeunce aborted	   */
+#define GD_FLG_SILENT		0x00004	/* Silent mode                     */
+#define GD_FLG_POSTFAIL		0x00008	/* Critical POST test failed       */
+#define GD_FLG_POSTSTOP		0x00010	/* POST seqeunce aborted           */
 #define GD_FLG_LOGINIT		0x00020	/* Log Buffer has been initialized */
-#define GD_FLG_DISABLE_CONSOLE	0x00040	/* Disable console (in & out)	   */
+#define GD_FLG_DISABLE_CONSOLE	0x00040	/* Disable console (in & out)      */
 #define GD_FLG_ENV_READY	0x00080	/* Env. imported into hash table   */
 #define GD_FLG_SERIAL_READY	0x00100	/* Pre-reloc serial console ready  */
-#define GD_FLG_FULL_MALLOC_INIT	0x00200	/* Full malloc() is ready	   */
-#define GD_FLG_SPL_INIT		0x00400	/* spl_init() has been called	   */
+#define GD_FLG_FULL_MALLOC_INIT	0x00200	/* Full malloc() is ready          */
+#define GD_FLG_SPL_INIT		0x00400	/* spl_init() has been called      */
 #define GD_FLG_SKIP_RELOC	0x00800	/* Don't relocate */
 
 #endif /* __ASM_GENERIC_GBL_DATA_H */
