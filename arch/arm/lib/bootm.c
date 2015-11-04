@@ -72,7 +72,7 @@ void arch_lmb_reserve(struct lmb *lmb)
 static void announce_and_cleanup(int fake)
 {
 	printf("\nStarting kernel ...%s\n\n", fake ?
-		"(fake run for tracing)" : "");
+	       "(fake run for tracing)" : "");
 	bootstage_mark_name(BOOTSTAGE_ID_BOOTM_HANDOFF, "start_kernel");
 #ifdef CONFIG_BOOTSTAGE_FDT
 	bootstage_fdt_add_report();
@@ -87,36 +87,36 @@ static void announce_and_cleanup(int fake)
 	cleanup_before_linux();
 }
 
-static void setup_start_tag (bd_t *bd)
+static void setup_start_tag(bd_t * bd)
 {
 	params = (struct tag *)bd->bi_boot_params;
 
 	params->hdr.tag = ATAG_CORE;
-	params->hdr.size = tag_size (tag_core);
+	params->hdr.size = tag_size(tag_core);
 
 	params->u.core.flags = 0;
 	params->u.core.pagesize = 0;
 	params->u.core.rootdev = 0;
 
-	params = tag_next (params);
+	params = tag_next(params);
 }
 
-static void setup_memory_tags(bd_t *bd)
+static void setup_memory_tags(bd_t * bd)
 {
 	int i;
 
 	for (i = 0; i < CONFIG_NR_DRAM_BANKS; i++) {
 		params->hdr.tag = ATAG_MEM;
-		params->hdr.size = tag_size (tag_mem32);
+		params->hdr.size = tag_size(tag_mem32);
 
 		params->u.mem.start = bd->bi_dram[i].start;
 		params->u.mem.size = bd->bi_dram[i].size;
 
-		params = tag_next (params);
+		params = tag_next(params);
 	}
 }
 
-static void setup_commandline_tag(bd_t *bd, char *commandline)
+static void setup_commandline_tag(bd_t * bd, char *commandline)
 {
 	char *p;
 
@@ -124,7 +124,7 @@ static void setup_commandline_tag(bd_t *bd, char *commandline)
 		return;
 
 	/* eat leading white space */
-	for (p = commandline; *p == ' '; p++);
+	for (p = commandline; *p == ' '; p++) ;
 
 	/* skip non-existent command lines so the kernel will still
 	 * use its default command line.
@@ -133,26 +133,25 @@ static void setup_commandline_tag(bd_t *bd, char *commandline)
 		return;
 
 	params->hdr.tag = ATAG_CMDLINE;
-	params->hdr.size =
-		(sizeof (struct tag_header) + strlen (p) + 1 + 4) >> 2;
+	params->hdr.size = (sizeof(struct tag_header) + strlen(p) + 1 + 4) >> 2;
 
-	strcpy (params->u.cmdline.cmdline, p);
+	strcpy(params->u.cmdline.cmdline, p);
 
-	params = tag_next (params);
+	params = tag_next(params);
 }
 
-static void setup_initrd_tag(bd_t *bd, ulong initrd_start, ulong initrd_end)
+static void setup_initrd_tag(bd_t * bd, ulong initrd_start, ulong initrd_end)
 {
 	/* an ATAG_INITRD node tells the kernel where the compressed
 	 * ramdisk can be found. ATAG_RDIMG is a better name, actually.
 	 */
 	params->hdr.tag = ATAG_INITRD2;
-	params->hdr.size = tag_size (tag_initrd);
+	params->hdr.size = tag_size(tag_initrd);
 
 	params->u.initrd.start = initrd_start;
 	params->u.initrd.size = initrd_end - initrd_start;
 
-	params = tag_next (params);
+	params = tag_next(params);
 }
 
 static void setup_serial_tag(struct tag **tmp)
@@ -162,10 +161,10 @@ static void setup_serial_tag(struct tag **tmp)
 
 	get_board_serial(&serialnr);
 	params->hdr.tag = ATAG_SERIAL;
-	params->hdr.size = tag_size (tag_serialnr);
+	params->hdr.size = tag_size(tag_serialnr);
 	params->u.serialnr.low = serialnr.low;
-	params->u.serialnr.high= serialnr.high;
-	params = tag_next (params);
+	params->u.serialnr.high = serialnr.high;
+	params = tag_next(params);
 	*tmp = params;
 }
 
@@ -175,18 +174,20 @@ static void setup_revision_tag(struct tag **in_params)
 
 	rev = get_board_rev();
 	params->hdr.tag = ATAG_REVISION;
-	params->hdr.size = tag_size (tag_revision);
+	params->hdr.size = tag_size(tag_revision);
 	params->u.revision.rev = rev;
-	params = tag_next (params);
+	params = tag_next(params);
 }
 
-static void setup_end_tag(bd_t *bd)
+static void setup_end_tag(bd_t * bd)
 {
 	params->hdr.tag = ATAG_NONE;
 	params->hdr.size = 0;
 }
 
-__weak void setup_board_tags(struct tag **in_params) {}
+__weak void setup_board_tags(struct tag **in_params)
+{
+}
 
 #ifdef CONFIG_ARM64
 static void do_nonsec_virt_switch(void)
@@ -201,7 +202,7 @@ static void do_nonsec_virt_switch(void)
 #endif
 
 /* Subcommand: PREP */
-static void boot_prep_linux(bootm_headers_t *images)
+static void boot_prep_linux(bootm_headers_t * images)
 {
 	char *commandline = getenv("bootargs");
 
@@ -259,18 +260,18 @@ bool armv7_boot_nonsec(void)
 #endif
 
 /* Subcommand: GO */
-static void boot_jump_linux(bootm_headers_t *images, int flag)
+static void boot_jump_linux(bootm_headers_t * images, int flag)
 {
 #ifdef CONFIG_ARM64
-	void (*kernel_entry)(void *fdt_addr, void *res0, void *res1,
-			void *res2);
+	void (*kernel_entry) (void *fdt_addr, void *res0, void *res1,
+			      void *res2);
 	int fake = (flag & BOOTM_STATE_OS_FAKE_GO);
 
 	kernel_entry = (void (*)(void *fdt_addr, void *res0, void *res1,
-				void *res2))images->ep;
+				 void *res2))images->ep;
 
 	debug("## Transferring control to Linux (at address %lx)...\n",
-		(ulong) kernel_entry);
+	      (ulong) kernel_entry);
 	bootstage_mark(BOOTSTAGE_ID_RUN_OS);
 
 	announce_and_cleanup(fake);
@@ -282,7 +283,7 @@ static void boot_jump_linux(bootm_headers_t *images, int flag)
 #else
 	unsigned long machid = gd->bd->bi_arch_number;
 	char *s;
-	void (*kernel_entry)(int zero, int arch, uint params);
+	void (*kernel_entry) (int zero, int arch, uint params);
 	unsigned long r2;
 	int fake = (flag & BOOTM_STATE_OS_FAKE_GO);
 
@@ -294,8 +295,8 @@ static void boot_jump_linux(bootm_headers_t *images, int flag)
 		printf("Using machid 0x%lx from environment\n", machid);
 	}
 
-	debug("## Transferring control to Linux (at address %08lx)" \
-		"...\n", (ulong) kernel_entry);
+	debug("## Transferring control to Linux (at address %08lx)"
+	      "...\n", (ulong) kernel_entry);
 	bootstage_mark(BOOTSTAGE_ID_RUN_OS);
 	announce_and_cleanup(fake);
 
@@ -308,8 +309,8 @@ static void boot_jump_linux(bootm_headers_t *images, int flag)
 #ifdef CONFIG_ARMV7_NONSEC
 		if (armv7_boot_nonsec()) {
 			armv7_init_nonsec();
-			secure_ram_addr(_do_nonsec_entry)(kernel_entry,
-							  0, machid, r2);
+			secure_ram_addr(_do_nonsec_entry) (kernel_entry,
+							   0, machid, r2);
 		} else
 #endif
 			kernel_entry(0, machid, r2);
@@ -323,8 +324,8 @@ static void boot_jump_linux(bootm_headers_t *images, int flag)
  * DIFFERENCE: Instead of calling prep and go at the end
  * they are called if subcommand is equal 0.
  */
-int do_bootm_linux(int flag, int argc, char * const argv[],
-		   bootm_headers_t *images)
+int do_bootm_linux(int flag, int argc, char *const argv[],
+		   bootm_headers_t * images)
 {
 	/* No need for those on ARM */
 	if (flag & BOOTM_STATE_OS_BD_T || flag & BOOTM_STATE_OS_CMDLINE)
@@ -348,15 +349,15 @@ int do_bootm_linux(int flag, int argc, char * const argv[],
 #ifdef CONFIG_CMD_BOOTZ
 
 struct zimage_header {
-	uint32_t	code[9];
-	uint32_t	zi_magic;
-	uint32_t	zi_start;
-	uint32_t	zi_end;
+	uint32_t code[9];
+	uint32_t zi_magic;
+	uint32_t zi_start;
+	uint32_t zi_end;
 };
 
 #define	LINUX_ARM_ZIMAGE_MAGIC	0x016f2818
 
-int bootz_setup(ulong image, ulong *start, ulong *end)
+int bootz_setup(ulong image, ulong * start, ulong * end)
 {
 	struct zimage_header *zi;
 
@@ -370,15 +371,15 @@ int bootz_setup(ulong image, ulong *start, ulong *end)
 	*end = zi->zi_end;
 
 	printf("Kernel image @ %#08lx [ %#08lx - %#08lx ]\n", image, *start,
-	      *end);
+	       *end);
 
 	return 0;
 }
 
-#endif	/* CONFIG_CMD_BOOTZ */
+#endif /* CONFIG_CMD_BOOTZ */
 
 #if defined(CONFIG_BOOTM_VXWORKS)
-void boot_prep_vxworks(bootm_headers_t *images)
+void boot_prep_vxworks(bootm_headers_t * images)
 {
 #if defined(CONFIG_OF_LIBFDT)
 	int off;
@@ -393,9 +394,10 @@ void boot_prep_vxworks(bootm_headers_t *images)
 #endif
 	cleanup_before_linux();
 }
-void boot_jump_vxworks(bootm_headers_t *images)
+
+void boot_jump_vxworks(bootm_headers_t * images)
 {
 	/* ARM VxWorks requires device tree physical address to be passed */
-	((void (*)(void *))images->ep)(images->ft_addr);
+	((void (*)(void *))images->ep) (images->ft_addr);
 }
 #endif

@@ -61,12 +61,12 @@
 #endif
 #endif /* CONFIG_SYS_POST_WORD_ADDR */
 
-static inline ulong post_word_load (void)
+static inline ulong post_word_load(void)
 {
 	return in_le32((volatile void *)(_POST_WORD_ADDR));
 }
 
-static inline void post_word_store (ulong value)
+static inline void post_word_store(ulong value)
 {
 	out_le32((volatile void *)(_POST_WORD_ADDR), value);
 }
@@ -93,7 +93,7 @@ extern void post_word_store(ulong value);
 #define POST_RAM		0x0200	/* test runs in RAM */
 #define POST_MANUAL		0x0400	/* test runs on diag command */
 #define POST_REBOOT		0x0800	/* test may cause rebooting */
-#define POST_PREREL		0x1000  /* test runs before relocation */
+#define POST_PREREL		0x1000	/* test runs before relocation */
 
 #define POST_CRITICAL		0x2000	/* Use failbootcmd if test failed */
 #define POST_STOP		0x4000	/* Interrupt POST sequence on fail */
@@ -123,18 +123,18 @@ struct post_test {
 	void (*reloc) (void);
 	unsigned long testid;
 };
-int post_init_f (void);
-void post_bootmode_init (void);
-int post_bootmode_get (unsigned int * last_test);
-void post_bootmode_clear (void);
-void post_output_backlog ( void );
-int post_run (char *name, int flags);
-int post_info (char *name);
-int post_log (char *format, ...);
+int post_init_f(void);
+void post_bootmode_init(void);
+int post_bootmode_get(unsigned int *last_test);
+void post_bootmode_clear(void);
+void post_output_backlog(void);
+int post_run(char *name, int flags);
+int post_info(char *name);
+int post_log(char *format, ...);
 #ifdef CONFIG_NEEDS_MANUAL_RELOC
-void post_reloc (void);
+void post_reloc(void);
 #endif
-unsigned long post_time_ms (unsigned long base);
+unsigned long post_time_ms(unsigned long base);
 
 extern struct post_test post_list[];
 extern unsigned int post_list_size;

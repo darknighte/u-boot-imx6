@@ -54,8 +54,9 @@ unsigned long __logbuffer_base(void)
 {
 	return CONFIG_SYS_SDRAM_BASE + get_effective_memsize() - LOGBUFF_LEN;
 }
+
 unsigned long logbuffer_base(void)
-__attribute__((weak, alias("__logbuffer_base")));
+    __attribute__ ((weak, alias("__logbuffer_base")));
 
 void logbuff_init_ptrs(void)
 {
@@ -63,15 +64,15 @@ void logbuff_init_ptrs(void)
 	char *s;
 
 #ifdef CONFIG_ALT_LB_ADDR
-	log = (logbuff_t *)CONFIG_ALT_LH_ADDR;
+	log = (logbuff_t *) CONFIG_ALT_LH_ADDR;
 	lbuf = (char *)CONFIG_ALT_LB_ADDR;
 #else
-	log = (logbuff_t *)(logbuffer_base()) - 1;
+	log = (logbuff_t *) (logbuffer_base()) - 1;
 	lbuf = (char *)log->buf;
 #endif
 
 	/* Set up log version */
-	if ((s = getenv ("logversion")) != NULL)
+	if ((s = getenv("logversion")) != NULL)
 		log_version = (int)simple_strtoul(s, NULL, 10);
 
 	if (log_version == 2)
@@ -86,15 +87,15 @@ void logbuff_init_ptrs(void)
 #else
 	/* No post routines, so we do our own checking                    */
 	if (tag != LOGBUFF_MAGIC || post_word != LOGBUFF_MAGIC) {
-		logbuff_reset ();
-		post_word_store (LOGBUFF_MAGIC);
+		logbuff_reset();
+		post_word_store(LOGBUFF_MAGIC);
 	}
 #endif
 	if (log_version == 2 && (long)log->v2.start > (long)log->v2.con)
 		log->v2.start = log->v2.con;
 
 	/* Initialize default loglevel if present */
-	if ((s = getenv ("loglevel")) != NULL)
+	if ((s = getenv("loglevel")) != NULL)
 		console_loglevel = (int)simple_strtoul(s, NULL, 10);
 
 	gd->flags |= GD_FLG_LOGINIT;
@@ -130,13 +131,13 @@ int drv_logbuff_init(void)
 	int rc;
 
 	/* Device initialization */
-	memset (&logdev, 0, sizeof (logdev));
+	memset(&logdev, 0, sizeof(logdev));
 
-	strcpy (logdev.name, "logbuff");
-	logdev.ext   = 0;			/* No extensions */
+	strcpy(logdev.name, "logbuff");
+	logdev.ext = 0;		/* No extensions */
 	logdev.flags = DEV_FLAGS_OUTPUT;	/* Output only */
-	logdev.putc  = logbuff_putc;		/* 'putc' function */
-	logdev.puts  = logbuff_puts;		/* 'puts' function */
+	logdev.putc = logbuff_putc;	/* 'putc' function */
+	logdev.puts = logbuff_puts;	/* 'puts' function */
 
 	rc = stdio_register(&logdev);
 
@@ -153,7 +154,7 @@ static void logbuff_putc(struct stdio_dev *dev, const char c)
 
 static void logbuff_puts(struct stdio_dev *dev, const char *s)
 {
-	logbuff_printk (s);
+	logbuff_printk(s);
 }
 
 void logbuff_log(char *msg)
@@ -165,7 +166,7 @@ void logbuff_log(char *msg)
 		 * Can happen only for pre-relocated errors as logging
 		 * at that stage should be disabled
 		 */
-		puts (msg);
+		puts(msg);
 	}
 }
 
@@ -179,7 +180,7 @@ void logbuff_log(char *msg)
  * Return:      None
  *
  */
-int do_log(cmd_tbl_t *cmdtp, int flag, int argc, char * const argv[])
+int do_log(cmd_tbl_t * cmdtp, int flag, int argc, char *const argv[])
 {
 	struct stdio_dev *sdev = NULL;
 	char *s;
@@ -219,19 +220,17 @@ int do_log(cmd_tbl_t *cmdtp, int flag, int argc, char * const argv[])
 			printf("Logbuffer   at  %08lx\n", (unsigned long)lbuf);
 			if (log_version == 2) {
 				printf("log_start    =  %08lx\n",
-					log->v2.start);
+				       log->v2.start);
 				printf("log_end      =  %08lx\n", log->v2.end);
 				printf("log_con      =  %08lx\n", log->v2.con);
 				printf("logged_chars =  %08lx\n",
-					log->v2.chars);
-			}
-			else {
+				       log->v2.chars);
+			} else {
 				printf("log_start    =  %08lx\n",
-					log->v1.start);
-				printf("log_size     =  %08lx\n",
-					log->v1.size);
+				       log->v1.start);
+				printf("log_size     =  %08lx\n", log->v1.size);
 				printf("logged_chars =  %08lx\n",
-					log->v1.chars);
+				       log->v1.chars);
 			}
 			return 0;
 		}
@@ -242,14 +241,12 @@ int do_log(cmd_tbl_t *cmdtp, int flag, int argc, char * const argv[])
 	}
 }
 
-U_BOOT_CMD(
-	log,     255,	1,	do_log,
-	"manipulate logbuffer",
-	"info   - show pointer details\n"
-	"log reset  - clear contents\n"
-	"log show   - show contents\n"
-	"log append <msg> - append <msg> to the logbuffer"
-);
+U_BOOT_CMD(log, 255, 1, do_log,
+	   "manipulate logbuffer",
+	   "info   - show pointer details\n"
+	   "log reset  - clear contents\n"
+	   "log show   - show contents\n"
+	   "log append <msg> - append <msg> to the logbuffer");
 
 static int logbuff_printk(const char *line)
 {
@@ -264,12 +261,8 @@ static int logbuff_printk(const char *line)
 	for (p = buf + 3; p < buf_end; p++) {
 		msg = p;
 		if (msg_level < 0) {
-			if (
-				p[0] != '<' ||
-				p[1] < '0' ||
-				p[1] > '7' ||
-				p[2] != '>'
-			) {
+			if (p[0] != '<' ||
+			    p[1] < '0' || p[1] > '7' || p[2] != '>') {
 				p -= 3;
 				p[0] = '<';
 				p[1] = default_message_loglevel + '0';
@@ -289,7 +282,7 @@ static int logbuff_printk(const char *line)
 				log->v2.chars++;
 			} else {
 				lbuf[(log->v1.start + log->v1.size) &
-					 LOGBUFF_MASK] = *p;
+				     LOGBUFF_MASK] = *p;
 				if (log->v1.size < LOGBUFF_LEN)
 					log->v1.size++;
 				else
