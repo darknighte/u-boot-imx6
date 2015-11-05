@@ -216,11 +216,6 @@ static int initr_addr_map(void)
 #endif
 
 #ifdef CONFIG_LOGBUFFER
-unsigned long logbuffer_base(void)
-{
-	return gd->ram_top - LOGBUFF_LEN;
-}
-
 static int initr_logbuffer(void)
 {
 	logbuff_init_ptrs();
