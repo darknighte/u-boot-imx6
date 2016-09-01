@@ -37,15 +37,14 @@ static void logbuff_putc(struct stdio_dev *dev, const char c);
 static void logbuff_puts(struct stdio_dev *dev, const char *s);
 static int logbuff_printk(const char *line);
 
-static void logbuff_append_v3(int argc, char *const argv[]);
-static void logbuff_printk_v3(const unsigned level, const char *msg);
-static void logbuff_info_v3(void);
-static void logbuff_show_v3(void);
-static void logbuff_printk_v3_write(const logbuff_v3_log_entry_header_t * hdr,
-				    const char *msg);
+static void log_append_v3(int argc, char *const argv[]);
+static void log_printk_v3(const unsigned level, const char *msg);
+static void log_info_v3(void);
+static void log_show_v3(void);
+static void log_printk_v3_write(const log_header_t * hdr, const char *msg);
 
 #ifdef CONFIG_LOGBUFFER_EARLY
-static void early_logbuff_printk_v3(const unsigned level, const char *msg);
+static void early_log_printk_v3(const unsigned level, const char *msg);
 
 #ifndef CONFIG_EARLY_LOGBUFF_ADDR
 #define CONFIG_EARLY_LOGBUFF_ADDR 0x20000000
@@ -65,10 +64,10 @@ static unsigned default_message_loglevel = 4;
 static unsigned log_version = 1;
 #ifdef CONFIG_ALT_LB_ADDR
 static volatile logbuff_t *log;
-static volatile log_cb_t *log_cb;
+static volatile lcb_t *lcb;
 #else
 static logbuff_t *log;
-static log_cb_t *log_cb;
+static lcb_t *lcb;
 #endif
 static char *lbuf;
 
@@ -90,24 +89,24 @@ unsigned long __logbuffer_base(void)
 unsigned long logbuffer_base(void)
 __attribute__((weak, alias("__logbuffer_base")));
 
-unsigned long __logbuffer_size(void)
+unsigned long __get_log_buf_len(void)
 {
-	unsigned long log_size = LOGBUFF_LEN;
+	unsigned long log_length = LOGBUFF_LEN;
 	char *s;
 
 	/* If set in the environment, overide the default log size */
 	if ((s = getenv("logsize")) != NULL)
-		log_size = (unsigned long)simple_strtoul(s, NULL, 10);
+		log_length = (unsigned long)simple_strtoul(s, NULL, 10);
 
-	return (log_size);
+	return (log_length);
 }
 
-unsigned long logbuffer_size(void)
-    __attribute__ ((weak, alias("__logbuffer_size")));
+unsigned long get_log_buf_len(void)
+    __attribute__ ((weak, alias("__get_log_buf_len")));
 
-unsigned long __logbuffer_overhead_size(void)
+unsigned long __get_lcb_len_with_pad(void)
 {
-	unsigned long log_overhead_size = LOGBUFF_OVERHEAD;
+	unsigned long log_overhead_size = LOGBUFF_CB_PADDED_LENGTH;
 	char *s;
 
 	/* If set in the environment, overide the default log overhead_size */
@@ -117,8 +116,8 @@ unsigned long __logbuffer_overhead_size(void)
 	return (log_overhead_size);
 }
 
-unsigned long logbuffer_overhead_size(void)
-    __attribute__ ((weak, alias("__logbuffer_overhead_size")));
+unsigned long get_lcb_len_with_pad(void)
+    __attribute__ ((weak, alias("__get_lcb_len_with_pad")));
 
 #ifdef CONFIG_LOGBUFFER_EARLY
 void logbuff_copy_early_buffer(void)
@@ -129,10 +128,8 @@ void logbuff_copy_early_buffer(void)
 		return;
 
 	while (p < (char *)CONFIG_EARLY_LOGBUFF_ADDR + gd->early_logbuff_idx) {
-		logbuff_printk_v3_write((logbuff_v3_log_entry_header_t *) p,
-					(p +
-					 log_cb->stored_log_entry_header_size));
-		p += ((logbuff_v3_log_entry_header_t *) p)->len;
+		log_printk_v3_write((log_header_t *) p, (p + lcb->log_hdr_size));
+		p += ((log_header_t *) p)->len;
 	}
 }
 #endif
@@ -165,18 +162,17 @@ void logbuff_init_ptrs(void)
 		 *   Instead it uses the hardcoded defaults, or ones set in the default config,
 		 *   but not ones saved in the environment.
 		 */
-		log_cb =
-		    (log_cb_t *) (logbuffer_base() - logbuffer_overhead_size());
+		lcb = (lcb_t *) (logbuffer_base() - get_lcb_len_with_pad());
 
 		/* Check to ensure that CB values match compiled constants, if not reset */
-		if (log_cb->log_version != log_version ||
-		    log_cb->log_length != logbuffer_size() ||
-		    log_cb->log_overhead_length != logbuffer_overhead_size() ||
-		    log_cb->stored_cb_size != sizeof(log_cb_t) ||
-		    log_cb->stored_log_entry_header_size !=
-		    sizeof(logbuff_v3_log_entry_header_t)
-		    || log_cb->log_physical_address != logbuffer_base()
-		    || log_cb->magic != LOGBUFF_MAGIC) {
+		if (lcb->log_version != log_version ||
+		    lcb->log_buf_len != get_log_buf_len() ||
+		    lcb->lcb_len_with_pad != get_lcb_len_with_pad() ||
+		    lcb->lcb_size != sizeof(lcb_t) ||
+		    lcb->log_hdr_size !=
+		    sizeof(log_header_t)
+		    || lcb->log_phys_addr != logbuffer_base()
+		    || lcb->log_magic != LOGBUFF_MAGIC) {
 			logbuff_reset();
 		}
 
@@ -243,28 +239,24 @@ void logbuff_reset(void)
 		 *   but not ones saved in the environment.
 		 *   Subsequent runs will take into account stored vars.
 		 */
-		log_cb =
-		    (log_cb_t *) (logbuffer_base() - logbuffer_overhead_size());
+		lcb = (lcb_t *) (logbuffer_base() - get_lcb_len_with_pad());
 
 		/* Initialize the control block */
-		memset(log_cb, 0, sizeof(log_cb_t));
-		log_cb->log_version = log_version;
-		log_cb->log_length = logbuffer_size();
-		log_cb->log_overhead_length = logbuffer_overhead_size();
-		log_cb->stored_cb_size = sizeof(log_cb_t);
-		log_cb->stored_log_entry_header_size =
-		    sizeof(logbuff_v3_log_entry_header_t);
-		log_cb->log_physical_address = logbuffer_base();
+		memset(lcb, 0, sizeof(lcb_t));
+		lcb->log_version = log_version;
+		lcb->log_buf_len = get_log_buf_len();
+		lcb->lcb_len_with_pad = get_lcb_len_with_pad();
+		lcb->lcb_size = sizeof(lcb_t);
+		lcb->log_hdr_size = sizeof(log_header_t);
+		lcb->log_phys_addr = logbuffer_base();
 
 		/* Initialize the first entry and mark it "valid" with a magic value */
-		logbuff_v3_log_entry_header_t *first =
-		    (logbuff_v3_log_entry_header_t *)
-		    log_cb->log_physical_address;
-		memset(first, 0, sizeof(logbuff_v3_log_entry_header_t));
-		first->magic = LOGBUFF_MAGIC;
+		log_header_t *first = (log_header_t *) lcb->log_phys_addr;
+		memset(first, 0, sizeof(log_header_t));
+		first->log_magic = LOGBUFF_MAGIC;
 
 		/* Last step, write the magic value into the control block to mark it valid */
-		log_cb->magic = LOGBUFF_MAGIC;
+		lcb->log_magic = LOGBUFF_MAGIC;
 		return;
 	}
 #ifndef CONFIG_ALT_LB_ADDR
@@ -353,7 +345,7 @@ int do_log(cmd_tbl_t *cmdtp, int flag, int argc, char * const argv[])
 	if (strcmp(argv[1], "append") == 0) {
 		/* Log concatenation of all arguments separated by spaces */
 		if (log_version == 3) {
-			logbuff_append_v3(argc, argv);
+			log_append_v3(argc, argv);
 			return 0;
 		}
 		for (i = 2; i < argc; i++) {
@@ -369,7 +361,7 @@ int do_log(cmd_tbl_t *cmdtp, int flag, int argc, char * const argv[])
 		if (strcmp(argv[1], "show") == 0) {
 			gd->logbuff_suppress_printk = 1;
 			if (log_version == 3) {
-				logbuff_show_v3();
+				log_show_v3();
 				gd->logbuff_suppress_printk = 0;
 				return 0;
 			}
@@ -393,7 +385,7 @@ int do_log(cmd_tbl_t *cmdtp, int flag, int argc, char * const argv[])
 			return 0;
 		} else if (strcmp(argv[1], "info") == 0) {
 			if (log_version == 3) {
-				logbuff_info_v3();
+				log_info_v3();
 				return 0;
 			}
 			printf("Logbuffer   at  %08lx\n", (unsigned long)lbuf);
@@ -464,10 +456,10 @@ static int logbuff_printk(const char *line)
 		}
 		if (log_version == 3) {
 			if ((gd->flags & GD_FLG_LOGINIT))
-				logbuff_printk_v3(msg_level, msg);
+				log_printk_v3(msg_level, msg);
 			else
 #ifdef CONFIG_LOGBUFFER_EARLY
-				early_logbuff_printk_v3(msg_level, msg);
+				early_log_printk_v3(msg_level, msg);
 #else
 				return 0;
 #endif
@@ -522,13 +514,12 @@ void logbuff_printf(const char *fmt, ...)
 }
 
  /*
-    get next record; idx must point to valid msg
+    get next record; idx must point to a valid entry
     NOTE: code from linux kernel printk.c::log_next()
   */
-static u32 log_next(const log_cb_t * const cb, const u32 idx)
+static u32 log_next(const lcb_t * const cb, const u32 idx)
 {
-	logbuff_v3_log_entry_header_t *msg = (logbuff_v3_log_entry_header_t *)
-	    (cb->log_physical_address + idx);
+	log_header_t *hdr = (log_header_t *) (cb->log_phys_addr + idx);
 
 	/* length == 0 indicates the end of the buffer; wrap */
 	/*
@@ -536,16 +527,15 @@ static u32 log_next(const log_cb_t * const cb, const u32 idx)
 	 * read the message at the start of the buffer as *this* one, and
 	 * return the one after that.
 	 */
-	if (!msg->len) {
-		msg =
-		    (logbuff_v3_log_entry_header_t *) cb->log_physical_address;
-		return msg->len;
+	if (!hdr->len) {
+		hdr = (log_header_t *) cb->log_phys_addr;
+		return hdr->len;
 	}
-	return idx + msg->len;
+	return idx + hdr->len;
 }
 
 #ifdef CONFIG_LOGBUFFER_EARLY
-static void early_logbuff_printk_v3(const unsigned level, const char *msg)
+static void early_log_printk_v3(const unsigned level, const char *msg)
 {
 	char *buffer;
 	u16 text_length;
@@ -557,7 +547,7 @@ static void early_logbuff_printk_v3(const unsigned level, const char *msg)
 
 	buffer = (char *)CONFIG_EARLY_LOGBUFF_ADDR + gd->early_logbuff_idx;
 	text_length = strlen(msg);
-	size = sizeof(logbuff_v3_log_entry_header_t) + text_length;
+	size = sizeof(log_header_t) + text_length;
 	pad_len = (-size) & (LOG_ALIGN - 1);
 	size += pad_len;
 
@@ -565,8 +555,8 @@ static void early_logbuff_printk_v3(const unsigned level, const char *msg)
 	if ((gd->early_logbuff_idx + size) >= CONFIG_EARLY_LOGBUFF_SZ)
 		return;
 
-	logbuff_v3_log_entry_header_t *next =
-	    (logbuff_v3_log_entry_header_t *) buffer;
+	log_header_t *next =
+	    (log_header_t *) buffer;
 
 	memset(next, 0, size);
 
@@ -575,143 +565,142 @@ static void early_logbuff_printk_v3(const unsigned level, const char *msg)
 	next->text_len = text_length;
 	next->len = size;
 	next->level = level;
-	memcpy(((void *)next) + sizeof(logbuff_v3_log_entry_header_t),
+	memcpy(((void *)next) + sizeof(log_header_t),
 	       msg, text_length);
-	next->magic = LOGBUFF_MAGIC;
+	next->log_magic = LOGBUFF_MAGIC;
 
 	gd->early_logbuff_idx += size;
 }
 #endif
 
-static void logbuff_printk_v3_write(const logbuff_v3_log_entry_header_t * hdr,
-				    const char *msg)
+static void log_printk_v3_write(const log_header_t * hdr, const char *msg)
 {
-	while (log_cb->log_first_seq < log_cb->log_next_seq) {
+	while (lcb->log_first_seq < lcb->log_next_seq) {
 		u32 free;
 
-		if (log_cb->log_next_idx > log_cb->log_first_idx)
-			free = max(log_cb->log_length -
-				   log_cb->log_next_idx, log_cb->log_first_idx);
+		if (lcb->log_next_idx > lcb->log_first_idx)
+			free = max(lcb->log_buf_len -
+				   lcb->log_next_idx, lcb->log_first_idx);
 		else
-			free = log_cb->log_first_idx - log_cb->log_next_idx;
+			free = lcb->log_first_idx - lcb->log_next_idx;
 
-		if (free > hdr->len + log_cb->stored_log_entry_header_size)
+		if (free > hdr->len + lcb->log_hdr_size)
 			break;
 
 		/* drop old messages until we have enough contiuous space */
-		log_cb->log_first_idx = log_next(log_cb, log_cb->log_first_idx);
-		log_cb->log_first_seq++;
+		lcb->log_first_idx = log_next(lcb, lcb->log_first_idx);
+		lcb->log_first_seq++;
 	}
 
 	/* Pointer to next message to write */
-	logbuff_v3_log_entry_header_t *next =
-	    (logbuff_v3_log_entry_header_t *) (log_cb->log_physical_address +
-					       log_cb->log_next_idx);
+	log_header_t *next =
+	    (log_header_t *) (lcb->log_phys_addr +
+					       lcb->log_next_idx);
 
-	if (log_cb->log_next_idx +
+	if (lcb->log_next_idx +
 	    hdr->len +
-	    log_cb->stored_log_entry_header_size >= log_cb->log_length) {
+	    lcb->log_hdr_size >= lcb->log_buf_len) {
 		/*
 		 * This message + an additional empty header does not fit
 		 * at the end of the buffer. Add an empty header with len == 0
 		 * to signify a wrap around.
 		 */
-		memset(next, 0, log_cb->stored_log_entry_header_size);
-		log_cb->log_next_idx = 0;
-		next = (logbuff_v3_log_entry_header_t *)
-		    log_cb->log_physical_address;
+		memset(next, 0, lcb->log_hdr_size);
+		lcb->log_next_idx = 0;
+		next = (log_header_t *)
+		    lcb->log_phys_addr;
 	}
 
 	/* Initialize the log entry */
 	memset(next, 0, hdr->len);
 
 	/* Fill the log entry contents */
-	memcpy(next, hdr, log_cb->stored_log_entry_header_size);
-	memcpy(((void *)next) + log_cb->stored_log_entry_header_size,
+	memcpy(next, hdr, lcb->log_hdr_size);
+	memcpy(((void *)next) + lcb->log_hdr_size,
 	       msg, hdr->text_len);
 
 	/* Increment the message count & update the next index. */
-	log_cb->log_next_idx += next->len;
-	log_cb->log_next_seq++;
+	lcb->log_next_idx += next->len;
+	lcb->log_next_seq++;
 }
 
 /*
   * Write a log entry with the new kernel log structure
  * NOTE: code from linux kernel printk.c::log_store()
   */
-static void logbuff_printk_v3(const unsigned level, const const char *msg)
+static void log_printk_v3(const unsigned level, const const char *msg)
 {
 	u32 size, pad_len;
 	const u16 text_length = strlen(msg);
-	logbuff_v3_log_entry_header_t hdr;
+	log_header_t hdr;
 
 	/* Calculate the total message record length with padding */
-	size = sizeof(logbuff_v3_log_entry_header_t) + text_length;
+	size = sizeof(log_header_t) + text_length;
 	pad_len = (-size) & (LOG_ALIGN - 1);
 	size += pad_len;
 
-	memset(&hdr, 0, log_cb->stored_log_entry_header_size);
+	memset(&hdr, 0, lcb->log_hdr_size);
 
 	/* Fill the log entry contents */
 	hdr.ts_nsec = (u64) timer_get_us() * 1000;
 	hdr.text_len = text_length;
 	hdr.len = size;
 	hdr.level = level;
-	hdr.magic = LOGBUFF_MAGIC;
+	hdr.log_magic = LOGBUFF_MAGIC;
 
-	logbuff_printk_v3_write(&hdr, msg);
+	log_printk_v3_write(&hdr, msg);
 }
 
-static void logbuff_show_v3(void)
+static void log_show_v3(void)
 {
-	logbuff_v3_log_entry_header_t *cur;
+	log_header_t *cur;
 	u64 cur_seq;
 	int i;
 
 	/* Validate the log pointers */
-	if (!log_cb ||
-	    !log_cb->log_physical_address ||
-	    log_cb->log_first_idx > log_cb->log_length ||
-	    log_cb->log_next_idx > log_cb->log_length ||
-	    log_cb->syslog_idx > log_cb->log_length ||
-	    log_cb->console_idx > log_cb->log_length ||
-	    log_cb->clear_idx > log_cb->log_length) {
+	if (!lcb ||
+	    !lcb->log_phys_addr ||
+	    lcb->log_first_idx > lcb->log_buf_len ||
+	    lcb->log_next_idx > lcb->log_buf_len ||
+	    lcb->syslog_idx > lcb->log_buf_len ||
+	    lcb->console_idx > lcb->log_buf_len ||
+	    lcb->clear_idx > lcb->log_buf_len) {
 		printf("Error: log pointers are invalid.  Resetting the log\n");
 		logbuff_reset();
 		return;
 	}
 
 	/* Determine if this is the initial log entry */
-	cur = (logbuff_v3_log_entry_header_t *)
-	    (log_cb->log_physical_address + log_cb->log_first_idx);
+	cur = (log_header_t *)
+	    (lcb->log_phys_addr + lcb->log_first_idx);
 
-	if (log_cb->log_first_idx == log_cb->log_next_idx &&
-	    cur->len == 0 && cur->magic == LOGBUFF_MAGIC)
+	if (lcb->log_first_idx == lcb->log_next_idx &&
+	    cur->len == 0 && cur->log_magic == LOGBUFF_MAGIC)
 		return;
 
-	for (cur_seq = log_cb->log_first_seq;
-	     cur_seq < log_cb->log_next_seq; cur_seq++) {
+	for (cur_seq = lcb->log_first_seq;
+	     cur_seq < lcb->log_next_seq; cur_seq++) {
 		/* Validate the current record. */
-		if ((cur->magic != LOGBUFF_MAGIC && cur->magic != 0) ||
-		    (cur->magic == LOGBUFF_MAGIC && cur->len == 0)) {
+		if ((cur->log_magic != LOGBUFF_MAGIC && cur->log_magic != 0) ||
+		    (cur->log_magic == LOGBUFF_MAGIC && cur->len == 0)) {
 			printf
 			    ("Error: Invalid entry detected in the log.  Resetting the log\n");
 			printf("Error: Dumping invalid entry : \n"
 			       "%p : 0x%x : 0x%16.16llx : 0x%4.4x : 0x%4.4x : 0x%2.2x : 0x%1.1x\n",
-			       cur, cur->magic, cur->ts_nsec, cur->len,
+			       cur, cur->log_magic, cur->ts_nsec, cur->len,
 			       cur->text_len, cur->facility, cur->level);
 			logbuff_reset();
 			return;
 		}
 		/* Check for a continuation record */
-		if (cur->magic == 0 && cur->len == 0) {
+		if (cur->log_magic == 0 && cur->len == 0) {
 			printf
 			    ("%p : 0x%16.16llx : 0x%4.4x : 0x%4.4x : 0x%2.2x : 0x%1.1x : Continuation Record\n",
 			     cur, cur->ts_nsec, cur->len, cur->text_len,
 			     cur->facility, cur->level);
 
-			cur = (logbuff_v3_log_entry_header_t *)
-			    (log_cb->log_physical_address);
+			cur = (log_header_t *)
+			    (lcb->log_phys_addr);
 			continue;
 		}
 
@@ -721,7 +710,7 @@ static void logbuff_show_v3(void)
 		     cur->level);
 		for (i = 0; i < cur->text_len; i++) {
 			char *this = (char *)cur;
-			putc(this[log_cb->stored_log_entry_header_size + i]);
+			putc(this[lcb->log_hdr_size + i]);
 		}
 
 		/* Add a newline. */
@@ -732,7 +721,7 @@ static void logbuff_show_v3(void)
 	}
 }
 
-static void logbuff_append_v3(int argc, char *const argv[])
+static void log_append_v3(int argc, char *const argv[])
 {
 	static const int buf_size = sizeof(buf2);
 	unsigned long i, size, count;
@@ -743,9 +732,7 @@ static void logbuff_append_v3(int argc, char *const argv[])
 	for (i = 2; i < argc; i++) {
 		if (count + strlen(argv[i]) + 1 <= buf_size) {
 			/* Add a space to the end of each arg or a null for the last one. */
-			size =
-			    sprintf(&buf2[count], "%s%c", argv[i],
-				    ((i < argc - 1) ? ' ' : 0));
+			size = sprintf(&buf2[count], "%s%c", argv[i], ((i < argc - 1) ? ' ' : 0));
 			if (size > 0)
 				count += size;
 			else
@@ -761,57 +748,53 @@ static void logbuff_append_v3(int argc, char *const argv[])
 		logbuff_printk(buf2);
 }
 
-static void logbuff_info_v3(void)
+static void log_info_v3(void)
 {
-	logbuff_v3_log_entry_header_t *first, *next;
+	log_header_t *first, *next;
 
-	if (!log_cb ||
-	    !log_cb->log_physical_address ||
-	    log_cb->log_first_idx > log_cb->log_length ||
-	    log_cb->log_next_idx > log_cb->log_length ||
-	    log_cb->syslog_idx > log_cb->log_length ||
-	    log_cb->console_idx > log_cb->log_length ||
-	    log_cb->clear_idx > log_cb->log_length) {
+	if (!lcb ||
+	    !lcb->log_phys_addr ||
+	    lcb->log_first_idx > lcb->log_buf_len ||
+	    lcb->log_next_idx > lcb->log_buf_len ||
+	    lcb->syslog_idx > lcb->log_buf_len ||
+	    lcb->console_idx > lcb->log_buf_len ||
+	    lcb->clear_idx > lcb->log_buf_len) {
 		printf("Error: Invalid address detected in the log control "
 		       "block.  Resetting the log\n");
 		logbuff_reset();
 		return;
 	}
 
-	first =
-	    (logbuff_v3_log_entry_header_t *) (log_cb->log_physical_address +
-					       log_cb->log_first_idx);
-	next =
-	    (logbuff_v3_log_entry_header_t *) (log_cb->log_physical_address +
-					       log_cb->log_next_idx);
+	first = (log_header_t *) (lcb->log_phys_addr + lcb->log_first_idx);
+	next = (log_header_t *) (lcb->log_phys_addr + lcb->log_next_idx);
 
 	printf("Log levels: console = %d  :  default = %d\n",
 	       console_loglevel, default_message_loglevel);
 	printf("Log version (calculated/stored) = %d/%d\n",
-	       log_version, log_cb->log_version);
+	       log_version, lcb->log_version);
 	printf("Log base address (calculated/stored) = %08lx/%p\n",
-	       logbuffer_base(), (void *)log_cb->log_physical_address);
+	       logbuffer_base(), (void *)lcb->log_phys_addr);
 	printf("Log size (calculated/stored) = %ld/%d\n",
-	       logbuffer_size(), log_cb->log_length);
+	       get_log_buf_len(), lcb->log_buf_len);
 	printf("Log overhead size (calculated/stored) = %ld/%d\n",
-	       logbuffer_overhead_size(), log_cb->log_overhead_length);
+	       get_lcb_len_with_pad(), lcb->lcb_len_with_pad);
 	printf("Log control block size (calculated/stored) = %d/%d\n",
-	       sizeof(log_cb_t), log_cb->stored_cb_size);
+	       sizeof(lcb_t), lcb->lcb_size);
 	printf("Log entry header size (calculated/stored) = %d/%d\n",
-	       sizeof(logbuff_v3_log_entry_header_t),
-	       log_cb->stored_log_entry_header_size);
+	       sizeof(log_header_t),
+	       lcb->log_hdr_size);
 	printf("Log control block magic (calculated/stored) = %08x/%08x\n",
-	       log_cb->magic, LOGBUFF_MAGIC);
+	       lcb->log_magic, LOGBUFF_MAGIC);
 	printf("Log sequence numbers: first/next/syslog/console/clear = "
 	       "%lld/%lld/%lld/%lld/%lld\n",
-	       log_cb->log_first_seq, log_cb->log_next_seq,
-	       log_cb->syslog_seq, log_cb->console_seq, log_cb->clear_seq);
+	       lcb->log_first_seq, lcb->log_next_seq,
+	       lcb->syslog_seq, lcb->console_seq, lcb->clear_seq);
 	printf("Log indices : first/next/syslog/console/clear = "
 	       "%u/%u/%u/%u/%u\n",
-	       log_cb->log_first_idx, log_cb->log_next_idx,
-	       log_cb->syslog_idx, log_cb->console_idx, log_cb->clear_idx);
+	       lcb->log_first_idx, lcb->log_next_idx,
+	       lcb->syslog_idx, lcb->console_idx, lcb->clear_idx);
 	printf("Log first entry magic/length = %08x/%d\n",
-	       first->magic, first->len);
+	       first->log_magic, first->len);
 	printf("Log next entry magic/length = %08x/%d\n",
-	       next->magic, next->len);
+	       next->log_magic, next->len);
 }
