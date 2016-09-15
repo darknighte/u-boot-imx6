@@ -420,7 +420,7 @@ int do_painit(cmd_tbl_t *cmdtp, int flag, int argc, char * const argv[])
 
 	base = gd->bd->bi_memsize;
 #if defined(CONFIG_LOGBUFFER)
-	base -= LOGBUFF_LEN + LOGBUFF_OVERHEAD;
+	base -= LOGBUFF_LEN + LOGBUFF_CB_PADDED_LENGTH;
 #endif
 	/*
 	 * gd->bd->bi_memsize == physical ram size - CONFIG_SYS_MM_TOP_HIDE
