@@ -48,7 +48,7 @@ typedef struct {
 	u8 facility;		/* syslog facility */
 	u8 flags:5;		/* internal record flags */
 	u8 level:3;		/* syslog level */
-} log_header_t;
+} log_hdr_t;
 
 /*
  * When enabled via CONFIG_LOGBUFFER, this control block collects tracking
@@ -89,12 +89,12 @@ typedef struct {
 	u32 clear_idx;
 
 	u32 log_version;
-	u32 lcb_len_with_pad;
+	u32 lcb_padded_len;
 	u32 lcb_size;
 	u32 log_hdr_size;
 	u32 log_phys_addr;
 	u32 lcb_magic;
-} log_cb_t;
+} lcb_t;
 
 int drv_logbuff_init (void);
 void logbuff_init_ptrs (void);

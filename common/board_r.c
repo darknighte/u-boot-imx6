@@ -705,7 +705,7 @@ int initr_mem(void)
 # endif
 # if defined(CONFIG_LOGBUFFER) && !defined(CONFIG_ALT_LB_ADDR)
 	/* Also take the logbuffer into account (pram is in kB) */
-	pram += (LOGBUFF_LEN + LOGBUFF_OVERHEAD) / 1024;
+	pram += (LOGBUFF_RESERVE) / 1024;
 # endif
 	sprintf(memsz, "%ldk", (long int) ((gd->ram_size / 1024) - pram));
 	setenv("mem", memsz);
