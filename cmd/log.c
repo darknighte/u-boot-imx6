@@ -30,6 +30,92 @@
 #include <post.h>
 #include <logbuff.h>
 
+#define LOGBUFF_MAGIC	0xc0de4ced	/* Forced by code, eh!	*/
+#define LOGBUFF_LEN	(16384)	/* Must be 16k right now */
+#define LOGBUFF_MASK	(LOGBUFF_LEN-1)
+#define LOGBUFF_CB_PADDED_LENGTH (1024) /* Logbuffer control block with padding */
+
+/* The mapping used here has to be the same as in setup_ext_logbuff ()
+   in linux/kernel/printk */
+
+typedef struct {
+	union {
+		struct {
+			unsigned long	tag;
+			unsigned long	start;
+			unsigned long	con;
+			unsigned long	end;
+			unsigned long	chars;
+		} v2;
+		struct {
+			unsigned long	dummy;
+			unsigned long	tag;
+			unsigned long	start;
+			unsigned long	size;
+			unsigned long	chars;
+		} v1;
+	};
+	unsigned char	buf[0];
+} logbuff_t;
+
+/* v3 log is based on structure in Linux kernel (kernel/printk/printk.c) */
+typedef struct {
+	u32 log_magic;		/* sanity check number */
+	u64 ts_nsec;		/* timestamp in nanoseconds */
+	u16 len;		/* length of entire record */
+	u16 text_len;		/* length of text buffer */
+	u16 dict_len;		/* length of dictionary buffer */
+	u8 facility;		/* syslog facility */
+	u8 flags:5;		/* internal record flags */
+	u8 level:3;		/* syslog level */
+} log_hdr_t;
+
+/*
+ * When enabled via CONFIG_LOGBUFFER, this control block collects tracking
+ * offsets for the log into a single place.  It also facilitates pointing
+ * the log to another location, and, when combined with the CONFIG_LOGBUFFER
+ * feature, it allows log sharing between the bootloader and the kernel.
+ *
+ * NOTE:
+ *   By convention, the control block and the log buffer are contiguous.
+ *   This requirement can be relaxed, if desired.
+ */
+typedef struct {
+	/* Pointer to log buffer space and length of space */
+	char *log_buf;
+	u32 log_buf_len;
+
+	/* index and sequence number of the first record stored in the buffer */
+	u64 log_first_seq;
+	u32 log_first_idx;
+
+	/* index and sequence number of the next record to store in the buffer */
+	u64 log_next_seq;
+	u32 log_next_idx;
+
+	/* the next printk record to read by syslog(READ) or /proc/kmsg */
+	u64 syslog_seq;
+	u32 syslog_idx;
+	u32 syslog_prev;  /* NOTE: this is an enum in printk.c */
+	size_t syslog_partial;
+
+	/* the next printk record to write to the console */
+	u64 console_seq;
+	u32 console_idx;
+	u32 console_prev;  /* NOTE: this is an enum in printk.c */
+
+	/* the next printk record to read after the last 'clear' command */
+	u64 clear_seq;
+	u32 clear_idx;
+
+	u32 log_version;
+	u32 lcb_padded_len;
+	u32 lcb_size;
+	u32 log_hdr_size;
+	u32 log_phys_addr;
+	u32 lcb_magic;
+} lcb_t;
+
 DECLARE_GLOBAL_DATA_PTR;
 
 /* Local prototypes */
@@ -62,7 +148,6 @@ static char buf2[1024];
 /* This combination will not print messages with the default loglevel */
 static unsigned console_loglevel = 3;
 static unsigned default_message_loglevel = 4;
-static unsigned log_version = 1;
 #ifdef CONFIG_ALT_LB_ADDR
 static volatile logbuff_t *log;
 static volatile lcb_t *lcb;
@@ -72,14 +157,31 @@ static lcb_t *lcb;
 #endif
 static char *lbuf;
 
-unsigned long __logbuffer_base(void)
+unsigned long __get_lcb_base(void)
+{
+	unsigned long lcb_base;
+	char *s;
+
+	/* Default to the top of available RAM */
+	lcb_base = CONFIG_SYS_SDRAM_BASE + get_effective_memsize();
+	lcb_base -= (get_lcb_padded_len() - get_log_buf_len());
+
+	/* If set in the environment, overide the default lcb base */
+	if ((s = getenv("lcbbase")) != NULL)
+		lcb_base = (unsigned long)simple_strtoul(s, NULL, 10);
+
+	return (lcb_base);
+}
+unsigned long get_lcb_base(void)
+__attribute__((weak, alias("__get_lcb_base")));
+
+unsigned long __get_log_base(void)
 {
 	unsigned long log_base;
 	char *s;
 
-	/* Default to the top of available RAM */
-	log_base =
-	    CONFIG_SYS_SDRAM_BASE + get_effective_memsize() - LOGBUFF_LEN;
+	/* Default to memory directly after the lcb */
+	log_base = get_lcb_base() + get_lcb_padded_len();
 
 	/* If set in the environment, overide the default log base */
 	if ((s = getenv("logbase")) != NULL)
@@ -87,8 +189,23 @@ unsigned long __logbuffer_base(void)
 
 	return (log_base);
 }
-unsigned long logbuffer_base(void)
-__attribute__((weak, alias("__logbuffer_base")));
+unsigned long get_log_base(void)
+__attribute__((weak, alias("__get_log_base")));
+
+u32 __get_log_version(void)
+{
+	unsigned long log_version = 1;
+	char *s;
+
+	/* If set in the environment, overide the default log size */
+	if ((s = getenv("logversion")) != NULL)
+		log_version = (unsigned long)simple_strtoul(s, NULL, 10);
+
+	return (log_version);
+}
+
+u32 get_log_version(void)
+    __attribute__ ((weak, alias("__get_log_version")));
 
 unsigned long __get_log_buf_len(void)
 {
@@ -107,14 +224,14 @@ unsigned long get_log_buf_len(void)
 
 unsigned long __get_lcb_padded_len(void)
 {
-	unsigned long log_overhead_size = LOGBUFF_CB_PADDED_LENGTH;
+	unsigned long lcb_padded_len = LOGBUFF_CB_PADDED_LENGTH;
 	char *s;
 
 	/* If set in the environment, overide the default log overhead_size */
-	if ((s = getenv("logoverheadsize")) != NULL)
-		log_overhead_size = (unsigned long)simple_strtoul(s, NULL, 10);
+	if ((s = getenv("lcb_padded_len")) != NULL)
+		lcb_padded_len = (unsigned long)simple_strtoul(s, NULL, 10);
 
-	return (log_overhead_size);
+	return (lcb_padded_len);
 }
 
 unsigned long get_lcb_padded_len(void)
@@ -125,7 +242,7 @@ void logbuff_copy_early_buffer(void)
 {
 	char *p = (char *)CONFIG_EARLY_LOGBUFF_ADDR;
 
-	if (log_version != 3)
+	if (get_log_version() != 3)
 		return;
 
 	while (p < (char *)CONFIG_EARLY_LOGBUFF_ADDR + gd->early_logbuff_idx) {
@@ -139,18 +256,18 @@ void logbuff_init_ptrs(void)
 {
 	unsigned long tag;
 	char *s;
+	unsigned long log_version;
 
 #ifdef CONFIG_ALT_LB_ADDR
 	log = (logbuff_t *)CONFIG_ALT_LH_ADDR;
 	lbuf = (char *)CONFIG_ALT_LB_ADDR;
 #else
-	log = (logbuff_t *)(logbuffer_base()) - 1;
+	log = (logbuff_t *)(get_log_base()) - 1;
 	lbuf = (char *)log->buf;
 #endif
 
-	/* Set up log version */
-	if ((s = getenv ("logversion")) != NULL)
-		log_version = (int)simple_strtoul(s, NULL, 10);
+	/* Read log version from the environment */
+	log_version = get_log_version();
 
 	gd->logbuff_suppress_printk = 0;
 
@@ -163,7 +280,7 @@ void logbuff_init_ptrs(void)
 		 *   Instead it uses the hardcoded defaults, or ones set in the default config,
 		 *   but not ones saved in the environment.
 		 */
-		lcb = (lcb_t *) (logbuffer_base() - get_lcb_padded_len());
+		lcb = (lcb_t *)get_lcb_base();
 
 		/* Check to ensure that CB values match compiled constants, if not reset */
 		if (lcb->log_version != log_version ||
@@ -171,7 +288,7 @@ void logbuff_init_ptrs(void)
 		    lcb->lcb_padded_len != get_lcb_padded_len() ||
 		    lcb->lcb_size != sizeof(lcb_t) ||
 		    lcb->log_hdr_size != sizeof(log_hdr_t) ||
-                    lcb->log_phys_addr != logbuffer_base() ||
+		    lcb->log_phys_addr != get_log_base() ||
 		    lcb->lcb_magic != LOGBUFF_MAGIC) {
 			logbuff_reset();
 		}
@@ -213,10 +330,11 @@ void logbuff_init_ptrs(void)
 int early_logbuff_init_ptrs(void)
 {
 	char *s;
+	unsigned long log_version;
 
-	/* Set up log version */
-	if ((s = getenv("logversion")) != NULL)
-		log_version = (int)simple_strtoul(s, NULL, 10);
+	/* Read log version from the environment */
+	log_version = get_log_version();
+
 	if ((s = getenv("loglevel")) != NULL)
 		console_loglevel = (int)simple_strtoul(s, NULL, 10);
 
@@ -228,6 +346,11 @@ int early_logbuff_init_ptrs(void)
 
 void logbuff_reset(void)
 {
+	unsigned long log_version;
+
+	/* Read log version from the environment */
+	log_version = get_log_version();
+
 	if (log_version == 3) {
 		printf("Resetting the log with v3 settings\n");
 
@@ -240,7 +363,7 @@ void logbuff_reset(void)
 		 *   but not ones saved in the environment.
 		 *   Subsequent runs will take into account stored vars.
 		 */
-		lcb = (lcb_t *) (logbuffer_base() - get_lcb_padded_len());
+		lcb = (lcb_t *)get_lcb_base();
 
 		/* Initialize the control block */
 		memset(lcb, 0, sizeof(lcb_t));
@@ -249,7 +372,7 @@ void logbuff_reset(void)
 		lcb->lcb_padded_len = get_lcb_padded_len();
 		lcb->lcb_size = sizeof(lcb_t);
 		lcb->log_hdr_size = sizeof(log_hdr_t);
-		lcb->log_phys_addr = logbuffer_base();
+		lcb->log_phys_addr = get_log_base();
 
 		/* Initialize the first entry and mark it "valid" with a magic value */
 		log_hdr_t *first = (log_hdr_t *) lcb->log_phys_addr;
@@ -342,6 +465,10 @@ int do_log(cmd_tbl_t *cmdtp, int flag, int argc, char * const argv[])
 	struct stdio_dev *sdev = NULL;
 	char *s;
 	unsigned long i, start, size;
+	unsigned long log_version;
+
+	/* Read log version from the environment */
+	log_version = get_log_version();
 
 	if (strcmp(argv[1], "append") == 0) {
 		/* Log concatenation of all arguments separated by spaces */
@@ -430,9 +557,13 @@ static int logbuff_printk(const char *line)
 	char *msg, *p, *buf_end;
 	int line_feed;
 	static signed char msg_level = -1;
+	unsigned long log_version;
 
 	if (gd->logbuff_suppress_printk)
 		return 0;
+
+	/* Read log version from the environment */
+	log_version = get_log_version();
 
 	strcpy(buf + 3, line);
 	i = strlen(line);
@@ -541,9 +672,10 @@ static void early_log_printk_v3(const unsigned level, const char *msg)
 	char *buffer;
 	u16 text_length;
 	u32 size, pad_len;
+	unsigned long log_version;
 
 	/* Only supports v3 */
-	if (log_version != 3)
+	if (get_log_version() != 3)
 		return;
 
 	buffer = (char *)CONFIG_EARLY_LOGBUFF_ADDR + gd->early_logbuff_idx;
@@ -594,13 +726,9 @@ static void log_printk_v3_write(const log_hdr_t * hdr, const char *msg)
 	}
 
 	/* Pointer to next message to write */
-	log_hdr_t *next =
-	    (log_hdr_t *) (lcb->log_phys_addr +
-					       lcb->log_next_idx);
+	log_hdr_t *next = (log_hdr_t *) (lcb->log_phys_addr + lcb->log_next_idx);
 
-	if (lcb->log_next_idx +
-	    hdr->len +
-	    lcb->log_hdr_size >= lcb->log_buf_len) {
+	if (lcb->log_next_idx + hdr->len + lcb->log_hdr_size >= lcb->log_buf_len) {
 		/*
 		 * This message + an additional empty header does not fit
 		 * at the end of the buffer. Add an empty header with len == 0
@@ -608,8 +736,7 @@ static void log_printk_v3_write(const log_hdr_t * hdr, const char *msg)
 		 */
 		memset(next, 0, lcb->log_hdr_size);
 		lcb->log_next_idx = 0;
-		next = (log_hdr_t *)
-		    lcb->log_phys_addr;
+		next = (log_hdr_t *) lcb->log_phys_addr;
 	}
 
 	/* Initialize the log entry */
@@ -617,8 +744,7 @@ static void log_printk_v3_write(const log_hdr_t * hdr, const char *msg)
 
 	/* Fill the log entry contents */
 	memcpy(next, hdr, lcb->log_hdr_size);
-	memcpy(((void *)next) + lcb->log_hdr_size,
-	       msg, hdr->text_len);
+	memcpy(((void *)next) + lcb->log_hdr_size, msg, hdr->text_len);
 
 	/* Increment the message count & update the next index. */
 	lcb->log_next_idx += next->len;
@@ -672,15 +798,13 @@ static void log_show_v3(void)
 	}
 
 	/* Determine if this is the initial log entry */
-	cur = (log_hdr_t *)
-	    (lcb->log_phys_addr + lcb->log_first_idx);
+	cur = (log_hdr_t *) (lcb->log_phys_addr + lcb->log_first_idx);
 
 	if (lcb->log_first_idx == lcb->log_next_idx &&
 	    cur->len == 0 && cur->log_magic == LOGBUFF_MAGIC)
 		return;
 
-	for (cur_seq = lcb->log_first_seq;
-	     cur_seq < lcb->log_next_seq; cur_seq++) {
+	for (cur_seq = lcb->log_first_seq; cur_seq < lcb->log_next_seq; cur_seq++) {
 		/* Validate the current record. */
 		if ((cur->log_magic != LOGBUFF_MAGIC && cur->log_magic != 0) ||
 		    (cur->log_magic == LOGBUFF_MAGIC && cur->len == 0)) {
@@ -700,15 +824,12 @@ static void log_show_v3(void)
 			     cur, cur->ts_nsec, cur->len, cur->text_len,
 			     cur->facility, cur->level);
 
-			cur = (log_hdr_t *)
-			    (lcb->log_phys_addr);
+			cur = (log_hdr_t *) (lcb->log_phys_addr);
 			continue;
 		}
 
-		printf
-		    ("%p : 0x%16.16llx : 0x%4.4x : 0x%4.4x : 0x%2.2x : 0x%1.1x : ",
-		     cur, cur->ts_nsec, cur->len, cur->text_len, cur->facility,
-		     cur->level);
+		printf ("%p : 0x%16.16llx : 0x%4.4x : 0x%4.4x : 0x%2.2x : 0x%1.1x : ",
+			cur, cur->ts_nsec, cur->len, cur->text_len, cur->facility, cur->level);
 		for (i = 0; i < cur->text_len; i++) {
 			char *this = (char *)cur;
 			putc(this[lcb->log_hdr_size + i]);
@@ -772,18 +893,19 @@ static void log_info_v3(void)
 	printf("Log levels: console = %d  :  default = %d\n",
 	       console_loglevel, default_message_loglevel);
 	printf("Log version (calculated/stored) = %d/%d\n",
-	       log_version, lcb->log_version);
+	       get_log_version(), lcb->log_version);
+	printf("lcb base address (calculated/stored) = %08lx/%p\n",
+	       get_lcb_base(), (void *)lcb);
 	printf("Log base address (calculated/stored) = %08lx/%p\n",
-	       logbuffer_base(), (void *)lcb->log_phys_addr);
+	       get_log_base(), (void *)lcb->log_phys_addr);
 	printf("Log size (calculated/stored) = %ld/%d\n",
 	       get_log_buf_len(), lcb->log_buf_len);
 	printf("Log overhead size (calculated/stored) = %ld/%d\n",
 	       get_lcb_padded_len(), lcb->lcb_padded_len);
-	printf("Log control block size (calculated/stored) = %d/%d\n",
+	printf("Log control block size (calculated/stored) = %lu/%u\n",
 	       sizeof(lcb_t), lcb->lcb_size);
-	printf("Log entry header size (calculated/stored) = %d/%d\n",
-	       sizeof(log_hdr_t),
-	       lcb->log_hdr_size);
+	printf("Log entry header size (calculated/stored) = %lu/%u\n",
+	       sizeof(log_hdr_t), lcb->log_hdr_size);
 	printf("Log control block magic (calculated/stored) = %08x/%08x\n",
 	       lcb->lcb_magic, LOGBUFF_MAGIC);
 	printf("Log sequence numbers: first/next/syslog/console/clear = "

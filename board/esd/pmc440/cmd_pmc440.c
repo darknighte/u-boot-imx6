@@ -350,7 +350,7 @@ int do_painit(cmd_tbl_t *cmdtp, int flag, int argc, char * const argv[])
 
 	base = (u32)gd->ram_size;
 #if defined(CONFIG_LOGBUFFER)
-	base -= LOGBUFF_LEN + LOGBUFF_CB_PADDED_LENGTH;
+	base -= get_lcb_padded_len() + get_log_buf_len();
 #endif
 	/*
 	 * gd->ram_size == physical ram size - CONFIG_SYS_MEM_TOP_HIDE

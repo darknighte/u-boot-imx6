@@ -1228,7 +1228,8 @@ int boot_ramdisk_high(struct lmb *lmb, ulong rd_data, ulong rd_len,
 
 #ifdef CONFIG_LOGBUFFER
 	/* Prevent initrd from overwriting logbuffer */
-	lmb_reserve(lmb, logbuffer_base() - LOGBUFF_CB_PADDED_LENGTH, LOGBUFF_RESERVE);
+	lmb_reserve(lmb, get_lcb_base(), get_lcb_padded_len());
+	lmb_reserve(lmb, get_log_base(), get_log_buf_len());
 #endif
 
 	debug("## initrd_high = 0x%08lx, copy_to_ram = %d\n",
