@@ -164,7 +164,7 @@ unsigned long __get_lcb_base(void)
 
 	/* Default to the top of available RAM */
 	lcb_base = CONFIG_SYS_SDRAM_BASE + get_effective_memsize();
-	lcb_base -= (get_lcb_padded_len() - get_log_buf_len());
+	lcb_base -= (get_lcb_padded_len() + get_log_buf_len());
 
 	/* If set in the environment, overide the default lcb base */
 	if ((s = getenv("lcbbase")) != NULL)
@@ -793,6 +793,16 @@ static void log_show_v3(void)
 	    lcb->console_idx > lcb->log_buf_len ||
 	    lcb->clear_idx > lcb->log_buf_len) {
 		printf("Error: log pointers are invalid.  Resetting the log\n");
+		printf ("lcb = %p\n", lcb);
+		if (lcb) {
+			printf ("lcb->log_phys_addr = %lu\n", lcb->log_phys_addr);
+			printf ("lcb->log_buf_len = %lu\n", lcb->log_buf_len);
+			printf ("lcb->log_first_idx = %lu\n", lcb->log_first_idx );
+			printf ("lcb->log_next_idx = %lu\n", lcb->log_next_idx );
+			printf ("lcb->syslog_idx = %lu\n", lcb->syslog_idx );
+			printf ("lcb->console_idx = %lu\n", lcb->console_idx );
+			printf ("lcb->clear_idx = %lu\n", lcb->clear_idx );
+		}
 		logbuff_reset();
 		return;
 	}
