@@ -159,16 +159,20 @@ static char *lbuf;
 
 unsigned long __get_lcb_base(void)
 {
-	unsigned long lcb_base;
+	unsigned long lcb_base = 0;
 	char *s;
 
-	/* Default to the top of available RAM */
-	lcb_base = CONFIG_SYS_SDRAM_BASE + get_effective_memsize();
-	lcb_base -= (get_lcb_padded_len() + get_log_buf_len());
-
-	/* If set in the environment, overide the default lcb base */
+	/* Check for a value set in the environment */
 	if ((s = getenv("lcbbase")) != NULL)
 		lcb_base = (unsigned long)simple_strtoul(s, NULL, 10);
+
+	/* Validate the value */
+	if (lcb_base == 0)
+	{
+		/* Default to the top of available RAM */
+		lcb_base = CONFIG_SYS_SDRAM_BASE + get_effective_memsize();
+		lcb_base -= (get_lcb_padded_len() + get_log_buf_len());
+	}
 
 	return (lcb_base);
 }
@@ -177,15 +181,16 @@ __attribute__((weak, alias("__get_lcb_base")));
 
 unsigned long __get_log_base(void)
 {
-	unsigned long log_base;
+	unsigned long log_base = 0;
 	char *s;
 
-	/* Default to memory directly after the lcb */
-	log_base = get_lcb_base() + get_lcb_padded_len();
-
-	/* If set in the environment, overide the default log base */
+	/* Check for a value set in the environment */
 	if ((s = getenv("logbase")) != NULL)
 		log_base = (unsigned long)simple_strtoul(s, NULL, 10);
+
+	/* Validate the value */
+	if (0 == log_base)
+		log_base = get_lcb_base() + get_lcb_padded_len();
 
 	return (log_base);
 }
@@ -200,6 +205,10 @@ u32 __get_log_version(void)
 	/* If set in the environment, overide the default log size */
 	if ((s = getenv("logversion")) != NULL)
 		log_version = (unsigned long)simple_strtoul(s, NULL, 10);
+
+	/* Validate the value */
+	if (0 == log_version || 3 < log_version)
+		log_version = 1;
 
 	return (log_version);
 }
@@ -216,6 +225,10 @@ unsigned long __get_log_buf_len(void)
 	if ((s = getenv("logsize")) != NULL)
 		log_length = (unsigned long)simple_strtoul(s, NULL, 10);
 
+	/* Validate the value */
+	if (0 == log_length)
+		log_length = LOGBUFF_LEN;
+
 	return (log_length);
 }
 
@@ -230,6 +243,10 @@ unsigned long __get_lcb_padded_len(void)
 	/* If set in the environment, overide the default log overhead_size */
 	if ((s = getenv("lcb_padded_len")) != NULL)
 		lcb_padded_len = (unsigned long)simple_strtoul(s, NULL, 10);
+
+	/* Validate the value */
+	if (0 == lcb_padded_len)
+		lcb_padded_len = LOGBUFF_CB_PADDED_LENGTH;
 
 	return (lcb_padded_len);
 }
