@@ -37,9 +37,10 @@
 #endif
 
 #define LOGBUFF_MAGIC	0xc0de4ced	/* Forced by code, eh!	*/
-#define LOGBUFF_LEN	(16384)	/* Must be 16k right now */
+#define LOGBUFF_LEN	(0x100000)
 #define LOGBUFF_MASK	(LOGBUFF_LEN-1)
 #define LOGBUFF_CB_PADDED_LENGTH (1024) /* Logbuffer control block with padding */
+#define LOGBUFF_LCB_BASE (0x30000000)
 
 /* The mapping used here has to be the same as in setup_ext_logbuff ()
    in linux/kernel/printk */
@@ -67,13 +68,13 @@ typedef struct {
 /* v3 log is based on structure in Linux kernel (kernel/printk/printk.c) */
 typedef struct {
 	u32 log_magic;		/* sanity check number */
-	u64 ts_nsec;		/* timestamp in nanoseconds */
 	u16 len;		/* length of entire record */
 	u16 text_len;		/* length of text buffer */
 	u16 dict_len;		/* length of dictionary buffer */
 	u8 facility;		/* syslog facility */
 	u8 flags:5;		/* internal record flags */
 	u8 level:3;		/* syslog level */
+	u64 ts_nsec;		/* timestamp in nanoseconds */
 } log_hdr_t;
 
 /*
@@ -165,13 +166,7 @@ static char *lbuf;
 
 unsigned long __get_lcb_base(void)
 {
-	unsigned long lcb_base = 0;
-
-	/* Default to the top of available RAM */
-	lcb_base = CONFIG_SYS_SDRAM_BASE + get_effective_memsize();
-	lcb_base -= (get_lcb_padded_len() + get_log_buf_len());
-
-	return (lcb_base);
+	return (LOGBUFF_LCB_BASE );
 }
 unsigned long get_lcb_base(void)
 __attribute__((weak, alias("__get_lcb_base")));
@@ -236,7 +231,7 @@ void logbuff_init_ptrs(void)
 	log = (logbuff_t *)CONFIG_ALT_LH_ADDR;
 	lbuf = (char *)CONFIG_ALT_LB_ADDR;
 #else
-	log = (logbuff_t *)(get_log_base()) - 1;
+	log = (logbuff_t *)get_log_base();
 	lbuf = (char *)log->buf;
 #endif
 
@@ -769,13 +764,13 @@ static void log_show_v3(void)
 		printf("Error: log pointers are invalid.  Resetting the log\n");
 		printf ("lcb = %p\n", lcb);
 		if (lcb) {
-			printf ("lcb->log_phys_addr = %lu\n", lcb->log_phys_addr);
-			printf ("lcb->log_buf_len = %lu\n", lcb->log_buf_len);
-			printf ("lcb->log_first_idx = %lu\n", lcb->log_first_idx );
-			printf ("lcb->log_next_idx = %lu\n", lcb->log_next_idx );
-			printf ("lcb->syslog_idx = %lu\n", lcb->syslog_idx );
-			printf ("lcb->console_idx = %lu\n", lcb->console_idx );
-			printf ("lcb->clear_idx = %lu\n", lcb->clear_idx );
+			printf ("lcb->log_phys_addr = %u\n", lcb->log_phys_addr);
+			printf ("lcb->log_buf_len = %u\n", lcb->log_buf_len);
+			printf ("lcb->log_first_idx = %u\n", lcb->log_first_idx );
+			printf ("lcb->log_next_idx = %u\n", lcb->log_next_idx );
+			printf ("lcb->syslog_idx = %u\n", lcb->syslog_idx );
+			printf ("lcb->console_idx = %u\n", lcb->console_idx );
+			printf ("lcb->clear_idx = %u\n", lcb->clear_idx );
 		}
 		logbuff_reset();
 		return;
@@ -854,19 +849,28 @@ static void log_append_v3(int argc, char *const argv[])
 		logbuff_printk(buf2);
 }
 
+#define member_size(type, member) sizeof(((type *)0)->member)
+#define print_member(type, field)  printf (#type "::" #field " = %u/%u\n", \
+		member_size(type, field), offsetof(type, field))
+
 static void log_info_v3(void)
 {
 	log_hdr_t *first, *next;
 
-	if (!lcb ||
-	    !lcb->log_phys_addr ||
-	    lcb->log_first_idx > lcb->log_buf_len ||
-	    lcb->log_next_idx > lcb->log_buf_len ||
-	    lcb->syslog_idx > lcb->log_buf_len ||
-	    lcb->console_idx > lcb->log_buf_len ||
-	    lcb->clear_idx > lcb->log_buf_len) {
-		printf("Error: Invalid address detected in the log control "
-		       "block.  Resetting the log\n");
+	printf ("struct log_hdr_t field sizes/offsets\n");
+	print_member(log_hdr_t, log_magic);
+	print_member(log_hdr_t, len);
+	print_member(log_hdr_t, text_len);
+	print_member(log_hdr_t, dict_len);
+	print_member(log_hdr_t, facility);
+	print_member(log_hdr_t, ts_nsec);
+	//print_member(log_hdr_t, flags);
+	//print_member(log_hdr_t, level);
+	//printf ("log_hdr_t::flags -/%u\n", offsetof(log_hdr_t, flags));
+	//printf ("log_hdr_t::level -/%u\n", offsetof(log_hdr_t, level));
+
+	if (!lcb) {
+		printf("Error: Log control block address is NULL. Resetting the log\n");
 		logbuff_reset();
 		return;
 	}
@@ -874,9 +878,9 @@ static void log_info_v3(void)
 	first = (log_hdr_t *) (lcb->log_phys_addr + lcb->log_first_idx);
 	next = (log_hdr_t *) (lcb->log_phys_addr + lcb->log_next_idx);
 
-	printf("Log levels: console = %d  :  default = %d\n",
+	printf("Log levels: console = %u  :  default = %u\n",
 	       console_loglevel, default_message_loglevel);
-	printf("Log version (calculated/stored) = %d/%d\n",
+	printf("Log version (calculated/stored) = %u/%u\n",
 	       get_log_version(), lcb->log_version);
 	printf("lcb base address (calculated/stored) = %08lx/%p\n",
 	       get_lcb_base(), (void *)lcb);
@@ -886,9 +890,9 @@ static void log_info_v3(void)
 	       get_log_buf_len(), lcb->log_buf_len);
 	printf("Log overhead size (calculated/stored) = %ld/%d\n",
 	       get_lcb_padded_len(), lcb->lcb_padded_len);
-	printf("Log control block size (calculated/stored) = %lu/%u\n",
+	printf("Log control block size (calculated/stored) = %u/%u\n",
 	       sizeof(lcb_t), lcb->lcb_size);
-	printf("Log entry header size (calculated/stored) = %lu/%u\n",
+	printf("Log entry header size (calculated/stored) = %u/%u\n",
 	       sizeof(log_hdr_t), lcb->log_hdr_size);
 	printf("Log control block magic (calculated/stored) = %08x/%08x\n",
 	       lcb->lcb_magic, LOGBUFF_MAGIC);
@@ -904,4 +908,15 @@ static void log_info_v3(void)
 	       first->log_magic, first->len);
 	printf("Log next entry magic/length = %08x/%d\n",
 	       next->log_magic, next->len);
+
+	if (!lcb ||
+	    !lcb->log_phys_addr ||
+	    lcb->log_first_idx > lcb->log_buf_len ||
+	    lcb->log_next_idx > lcb->log_buf_len ||
+	    lcb->syslog_idx > lcb->log_buf_len ||
+	    lcb->console_idx > lcb->log_buf_len ||
+	    lcb->clear_idx > lcb->log_buf_len) {
+		printf("Error: Invalid log control block detected.  Resetting the log\n");
+		logbuff_reset();
+	}
 }
