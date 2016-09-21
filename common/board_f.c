@@ -395,10 +395,10 @@ static int reserve_logbuffer(void)
 {
 	/* reserve kernel log buffer */
 	gd->relocaddr -= get_log_buf_len();
-	debug("Reserving %luk for kernel logbuffer at %08lx\n",
+	debug("Reserving %lu for kernel logbuffer at %08lx\n",
 		get_log_buf_len(), gd->relocaddr);
 	gd->relocaddr -= get_lcb_padded_len();
-	debug("Reserving %luk for kernel log control block at %08lx\n",
+	debug("Reserving %lu for kernel log control block at %08lx\n",
 		get_lcb_padded_len(), gd->relocaddr);
 	return 0;
 }
